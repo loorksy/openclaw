@@ -4810,6 +4810,8 @@ export const en: TranslationMap & {
       stop: "Stop",
       targets: "Targets",
       activation: "Activation",
+      prepare: "Prepare from closed candles",
+      preparing: "Preparing…",
     },
     tasks: {
       lead: "Responsibilities keep running after you close the browser.",

@@ -900,6 +900,65 @@ describe("manual execution", () => {
     store.close();
   });
 
+  it("prepares a recommendation from closed candles and does not call a broker", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const candles = Array.from({ length: 22 }, (_, index) => {
+      const close = 2305;
+      if (index === 4) {
+        return {
+          time: 1_700_000_000_000 + index * 3_600_000,
+          open: 2300,
+          high: 2304,
+          low: 2296,
+          close: 2298,
+        };
+      }
+      if (index === 5) {
+        return {
+          time: 1_700_000_000_000 + index * 3_600_000,
+          open: 2299,
+          high: 2312,
+          low: 2297,
+          close: 2310,
+        };
+      }
+      if (index === 14) {
+        return {
+          time: 1_700_000_000_000 + index * 3_600_000,
+          open: 2304,
+          high: 2360,
+          low: 2302,
+          close: 2305,
+        };
+      }
+      return {
+        time: 1_700_000_000_000 + index * 3_600_000,
+        open: close + 0.2,
+        high: close + 0.4,
+        low: close - 0.4,
+        close,
+      };
+    });
+    service.readCandles = async () => ({
+      ok: true,
+      candles,
+      price: 2305,
+      stale: false,
+      invented: false,
+    });
+    const prepared = await service.prepareRecommendation(candles.at(-1)!.time + 3_600_000);
+    expect(prepared.ok).toBe(true);
+    expect(prepared.brokerCalled).toBe(false);
+    expect(prepared.invented).toBe(false);
+    if (!prepared.ok) {
+      return;
+    }
+    expect(prepared.plan.stopLoss).toBeLessThan(2296);
+    expect(store.listRecommendations()).toHaveLength(1);
+    store.close();
+  });
+
   it("grades closed candles from the market read and ignores a caller-supplied series", async () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);

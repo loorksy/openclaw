@@ -27,6 +27,7 @@ import {
 } from "./domain/monitor.js";
 import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
 import { assertPermission, authorizeTrade } from "./domain/permissions.js";
+import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility } from "./domain/responsibilities.js";
@@ -377,6 +378,26 @@ export class LonoraService {
       ...plan,
       activationSummary: activationSummary(plan, language),
     }));
+  }
+
+  async prepareRecommendation(now = Date.now()) {
+    const language = this.store.ensureLocalOwner().language;
+    const read = await this.readVisibleCandles(now);
+    if (!read.ok) {
+      return {
+        ok: false as const,
+        reason: "market_unavailable" as const,
+        message: read.error ?? "Market data is unavailable.",
+        invented: false as const,
+        brokerCalled: false as const,
+      };
+    }
+    const prepared = prepareGoldPlan(read.candles, language, now);
+    if (!prepared.ok) {
+      return prepared;
+    }
+    this.store.saveRecommendation(prepared.plan);
+    return prepared;
   }
 
   saveRecommendation(plan: RecommendationPlan) {

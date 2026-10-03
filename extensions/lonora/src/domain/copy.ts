@@ -25,6 +25,12 @@ const COPY = {
       "The stored activation rule could not be read, so this plan will not fill.",
     "calendar.empty": "No gold-relevant high or medium events are on the calendar in this window.",
     "calendar.unavailable": "No economic calendar is available. Lonora will not invent an event.",
+    "plan.insufficient": "Closed candles are not enough to place a protected stop.",
+    "plan.noZone": "No supply or demand zone is available, so no plan was prepared.",
+    "plan.noTarget": "No structural target clears the distance floor, so no plan was prepared.",
+    "plan.invalid": "The zone does not produce a valid stop, so no plan was prepared.",
+    "plan.stopBeyond": "Stop sits beyond the structural level",
+    "plan.widened": "The distance floor pushed it farther out.",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -48,6 +54,12 @@ const COPY = {
     "recommendations.unreadable": "تعذر قراءة شرط التفعيل المخزّن، لذلك لن تُملأ هذه الخطة.",
     "calendar.empty": "لا أحداث عالية أو متوسطة ذات صلة بالذهب في هذه النافذة.",
     "calendar.unavailable": "التقويم الاقتصادي غير متاح. لن تخترع لونورا حدثاً.",
+    "plan.insufficient": "الشموع المغلقة لا تكفي لوضع وقف محمي.",
+    "plan.noZone": "لا توجد منطقة عرض أو طلب، لذلك لم تُجهَّز خطة.",
+    "plan.noTarget": "لا يوجد هدف هيكلي يجتاز حد المسافة، لذلك لم تُجهَّز خطة.",
+    "plan.invalid": "المنطقة لا تنتج وقفاً صالحاً، لذلك لم تُجهَّز خطة.",
+    "plan.stopBeyond": "الوقف يقع بعد المستوى الهيكلي",
+    "plan.widened": "حد المسافة دفعه أبعد.",
   },
 } as const;
 

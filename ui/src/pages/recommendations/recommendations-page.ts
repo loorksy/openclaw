@@ -28,6 +28,7 @@ class RecommendationsPage extends OpenClawLightDomElement {
 
   @state() private plans: Recommendation[] = [];
   @state() private error: string | null = null;
+  @state() private notice: string | null = null;
   @state() private loading = false;
 
   private loadGeneration = 0;
@@ -49,6 +50,45 @@ class RecommendationsPage extends OpenClawLightDomElement {
   override connectedCallback() {
     super.connectedCallback();
     void this.load();
+  }
+
+  private async prepare() {
+    const gateway = this.context?.gateway;
+    const client = gateway?.snapshot.client;
+    if (!client || gateway.snapshot.phase !== "connected") {
+      this.error = t("lonora.recommendations.disconnected");
+      return;
+    }
+    if (isGatewayMethodAdvertised(gateway.snapshot, "lonora.recommendations.prepare") === false) {
+      this.error = t("lonora.recommendations.unavailable");
+      return;
+    }
+    this.loading = true;
+    this.error = null;
+    this.notice = null;
+    try {
+      const result = await client.request<{
+        ok: boolean;
+        message?: string;
+        brokerCalled?: boolean;
+        invented?: boolean;
+        plan?: { rationale?: string };
+      }>("lonora.recommendations.prepare", {});
+      if (!result?.ok) {
+        this.notice = result?.message ?? t("lonora.recommendations.unavailable");
+        return;
+      }
+      if (result.brokerCalled || result.invented) {
+        this.error = t("lonora.recommendations.unavailable");
+        return;
+      }
+      this.notice = result.plan?.rationale ?? t("lonora.recommendations.prepare");
+      await this.load();
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : t("lonora.recommendations.unavailable");
+    } finally {
+      this.loading = false;
+    }
   }
 
   private async load() {
@@ -101,7 +141,16 @@ class RecommendationsPage extends OpenClawLightDomElement {
         >
           ${t("common.refresh")}
         </button>
+        <button
+          class="btn"
+          type="button"
+          ?disabled=${this.loading}
+          @click=${() => void this.prepare()}
+        >
+          ${this.loading ? t("lonora.recommendations.preparing") : t("lonora.recommendations.prepare")}
+        </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : nothing}
+        ${this.notice ? html`<p role="status">${this.notice}</p>` : nothing}
         ${
           !this.error && this.plans.length === 0
             ? html`<p>${t("lonora.recommendations.empty")}</p>`

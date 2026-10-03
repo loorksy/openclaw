@@ -238,14 +238,17 @@ export default definePluginEntry({
     );
     tool(
       "lonora_recommendations",
-      "List or grade XAUUSD recommendations. Grading uses closed candles only.",
+      "List, grade, or prepare an XAUUSD recommendation from closed candles. Preparing a plan does not place an order.",
       Type.Object({
-        action: Type.Union([Type.Literal("list"), Type.Literal("grade")]),
+        action: Type.Union([Type.Literal("list"), Type.Literal("grade"), Type.Literal("prepare")]),
       }),
       async (params) => {
         const current = requireService();
         if (params.action === "grade") {
           return current.gradeLiveRecommendations();
+        }
+        if (params.action === "prepare") {
+          return current.prepareRecommendation();
         }
         return current.listRecommendations();
       },
@@ -403,6 +406,11 @@ export default definePluginEntry({
       "lonora.recommendations.list",
       handle(() => requireService().listRecommendations()),
       { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
+      "lonora.recommendations.prepare",
+      handle(() => requireService().prepareRecommendation()),
+      { scope: "operator.write" },
     );
     api.registerGatewayMethod(
       "lonora.tasks.list",
