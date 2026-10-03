@@ -11,6 +11,7 @@ export type MemoryKind =
   | "responsibility"
   | "market_observation"
   | "structure_read"
+  | "liquidity_read"
   | "recommendation"
   | "historical_case"
   | "lesson"

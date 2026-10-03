@@ -38,6 +38,8 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private candles: ChartCandle[] = [];
   @state() private latestSweep: { side: "buy_side" | "sell_side"; sweptLevel: number } | null =
     null;
+  @state() private buySide: number | null = null;
+  @state() private sellSide: number | null = null;
   @state() private pattern: SwingRangeView | null = null;
   @state() private candleShape: CandleShapeView | null = null;
   @state() private dealingRange: DealingRangeView | null = null;
@@ -80,6 +82,8 @@ class MarketPage extends OpenClawLightDomElement {
       this.snapshot = null;
       this.candles = [];
       this.latestSweep = null;
+      this.buySide = null;
+      this.sellSide = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -212,6 +216,8 @@ class MarketPage extends OpenClawLightDomElement {
     if (!target.ok) {
       this.candles = [];
       this.latestSweep = null;
+      this.buySide = null;
+      this.sellSide = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -224,6 +230,8 @@ class MarketPage extends OpenClawLightDomElement {
         ok: boolean;
         candles: ChartCandle[];
         latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
+        buySide?: number | null;
+        sellSide?: number | null;
         pattern?: SwingRangeView | null;
         candleShape?: CandleShapeView | null;
         range?: DealingRangeView | null;
@@ -236,6 +244,8 @@ class MarketPage extends OpenClawLightDomElement {
       }
       this.candles = read.invented ? [] : read.candles;
       this.latestSweep = read.invented ? null : (read.latestSweep ?? null);
+      this.buySide = read.invented || !read.ok ? null : finitePrice(read.buySide);
+      this.sellSide = read.invented || !read.ok ? null : finitePrice(read.sellSide);
       this.pattern =
         read.invented || read.pattern?.inventedTarget !== false ? null : (read.pattern ?? null);
       this.candleShape =
@@ -251,6 +261,8 @@ class MarketPage extends OpenClawLightDomElement {
       }
       this.candles = [];
       this.latestSweep = null;
+      this.buySide = null;
+      this.sellSide = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -327,6 +339,9 @@ class MarketPage extends OpenClawLightDomElement {
                 <p>${rangeText(this.dealingRange, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.sweep")}</h2>
                 <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
+                <h2>${t("lonora.market.pools")}</h2>
+                <p>${poolText(this.buySide, "lonora.market.poolsBuy")}</p>
+                <p>${poolText(this.sellSide, "lonora.market.poolsSell")}</p>
                 <h2>${t("lonora.market.pattern")}</h2>
                 <p>${patternText(this.pattern, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.candle")}</h2>
@@ -580,6 +595,20 @@ function patternStageLabel(stage: string) {
     default:
       return t("lonora.market.patternUnknown");
   }
+}
+
+function finitePrice(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function poolText(
+  price: number | null,
+  labelKey: "lonora.market.poolsBuy" | "lonora.market.poolsSell",
+) {
+  if (price == null) {
+    return `${t(labelKey)} ${t("lonora.market.poolsUnread")}`;
+  }
+  return `${t(labelKey)} ${price}`;
 }
 
 function sweepText(

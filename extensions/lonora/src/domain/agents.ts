@@ -16,7 +16,7 @@ import {
 import { describeCandleShape, latestCandleShape } from "./candlesticks.js";
 import { copy } from "./copy.js";
 import { describeHeadlines, type NewsHeadline } from "./headlines.js";
-import { analyzeLiquidity } from "./liquidity-sweeps.js";
+import { describeRestingLiquidity, restingLiquidity } from "./liquidity-sweeps.js";
 import { priorGoldDay } from "./market.js";
 import type { OwnerLanguage } from "./owner.js";
 import { classifySwingRange, describePattern } from "./patterns.js";
@@ -132,25 +132,29 @@ export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
   };
 }
 
-export function runLiquidityAnalyst(candles: Candle[]): SpecialistResult {
+export function runLiquidityAnalyst(
+  candles: Candle[],
+  language: OwnerLanguage = "en",
+): SpecialistResult {
   if (candles.length < 5) {
     return {
       agent: "liquidity-analyst",
       ok: false,
-      summary: "Not enough candles to locate liquidity.",
+      summary: copy(language, "liquidity.short"),
       data: {},
       failure: "insufficient_candles",
     };
   }
-  const liquidity = analyzeLiquidity(candles);
-  const latest = liquidity.latest;
+  const resting = restingLiquidity(candles);
   return {
     agent: "liquidity-analyst",
     ok: true,
-    summary: latest
-      ? `${latest.side} sweep of ${latest.sweptLevel}, close back inside`
-      : `Buy-side ${liquidity.nearestBuySide?.price ?? "none"}, sell-side ${liquidity.nearestSellSide?.price ?? "none"}`,
-    data: liquidity,
+    summary: describeRestingLiquidity(language, resting, candles.length),
+    data: {
+      buySide: resting.buySide,
+      sellSide: resting.sellSide,
+      latest: resting.sweep,
+    },
   };
 }
 
@@ -258,7 +262,7 @@ export function runSpecialist(
     case "market-watcher":
       return { ...runStructureAnalyst(input.candles ?? []), agent: id };
     case "liquidity-analyst":
-      return runLiquidityAnalyst(input.candles ?? []);
+      return runLiquidityAnalyst(input.candles ?? [], input.language ?? "en");
     case "supply-demand-analyst":
       return runSupplyDemandAnalyst(input.candles ?? []);
     case "multi-timeframe-analyst":

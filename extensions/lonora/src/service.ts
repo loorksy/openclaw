@@ -29,7 +29,12 @@ import {
   type HeadlineRead,
   type NewsHeadline,
 } from "./domain/headlines.js";
-import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
+import {
+  analyzeLiquidity,
+  describeRestingLiquidity,
+  restingLiquidity,
+  sweepKey,
+} from "./domain/liquidity-sweeps.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
 import { candlesVisibleAt, priorGoldDay, readMarketClock } from "./domain/market.js";
 import {
@@ -261,6 +266,9 @@ export class LonoraService {
         candleShape: null,
         range: null,
         priorDay: null,
+        latestSweep: null,
+        buySide: null,
+        sellSide: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -271,12 +279,14 @@ export class LonoraService {
       now,
       GOLD_BAR_MS,
     );
-    const liquidity = analyzeLiquidity(visible.candles);
+    const resting = this.noteLiquidity(visible.candles);
     this.noteStructure(visible.candles);
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
-      latestSweep: liquidity.latest,
+      latestSweep: resting.sweep,
+      buySide: resting.buySide,
+      sellSide: resting.sellSide,
       pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
       candleShape: visible.candles.length > 0 ? latestCandleShape(visible.candles) : null,
       range:
@@ -339,6 +349,7 @@ export class LonoraService {
         const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
         candles = visible.candles as Candle[];
         this.noteStructure(candles);
+        this.noteLiquidity(candles);
         this.lastDataStatus = visible.stale ? "stale" : "ok";
         this.lastDataError = visible.stale ? "Candle data is stale." : null;
         price = candles.at(-1)?.close ?? null;
@@ -625,7 +636,7 @@ export class LonoraService {
   }
 
   remember(kind: MemoryKind, content: string, symbol?: string) {
-    if (kind === "structure_read") {
+    if (kind === "structure_read" || kind === "liquidity_read") {
       return null;
     }
     return this.store.addMemory({ kind, content, symbol });
@@ -661,6 +672,26 @@ export class LonoraService {
     this.store.replaceMemory("structure_read", "XAUUSD", text);
   }
 
+  /**
+   * One liquidity sentence from the same closed candles. The next read replaces it.
+   * An empty or failed read leaves the previous sentence in place.
+   */
+  private noteLiquidity(candles: Candle[]) {
+    const resting = restingLiquidity(candles);
+    if (candles.length === 0) {
+      return resting;
+    }
+    const language = this.store.ensureLocalOwner().language;
+    const text = describeRestingLiquidity(language, resting, candles.length)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("liquidity_read", "XAUUSD", text);
+    }
+    return resting;
+  }
+
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
   noteConversation(messages: readonly unknown[]): string | null {
     const text = latestOwnerText(messages);
@@ -690,6 +721,7 @@ export class LonoraService {
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
     const structure = this.store.listRecentMemory("structure_read", 1);
+    const liquidity = this.store.listRecentMemory("liquidity_read", 1);
     const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
@@ -704,6 +736,7 @@ export class LonoraService {
       lessons.length === 0 &&
       observation.length === 0 &&
       structure.length === 0 &&
+      liquidity.length === 0 &&
       conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
@@ -719,6 +752,9 @@ export class LonoraService {
     }
     if (structure[0]) {
       lines.push(`${copy(language, "memory.structure")} ${structure[0].content}`);
+    }
+    if (liquidity[0]) {
+      lines.push(`${copy(language, "memory.liquidity")} ${liquidity[0].content}`);
     }
     if (conversation[0]) {
       lines.push(`${copy(language, "memory.conversation")} ${conversation[0].content}`);

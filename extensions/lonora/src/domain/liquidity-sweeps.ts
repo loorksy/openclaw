@@ -9,6 +9,8 @@ import {
   type Candle,
   type PriceLevel,
 } from "./candles.js";
+import { copy } from "./copy.js";
+import type { OwnerLanguage } from "./owner.js";
 import { detectStructureEvents, type StructureEvent } from "./structure.js";
 
 export type LiquiditySweep = {
@@ -134,6 +136,72 @@ export function analyzeLiquidity(candles: Candle[]) {
 
 export function sweepKey(sweep: LiquiditySweep | null): string {
   return sweep ? `${sweep.side}:${sweep.candleTime}:${sweep.sweptLevel}` : "none";
+}
+
+export interface RestingLiquidity {
+  buySide: number | null;
+  sellSide: number | null;
+  sweep: LiquiditySweep | null;
+}
+
+/** Closest equal high above the close, and closest equal low below it. */
+export function restingLiquidity(candles: readonly Candle[]): RestingLiquidity {
+  if (candles.length < 2) {
+    return { buySide: null, sellSide: null, sweep: null };
+  }
+  const analyzed = analyzeLiquidity([...candles]);
+  const close = candles.at(-1)?.close;
+  if (close == null || !Number.isFinite(close)) {
+    return { buySide: null, sellSide: null, sweep: analyzed.latest };
+  }
+  return {
+    buySide: closestPool(analyzed.equalHighs, close, "above"),
+    sellSide: closestPool(analyzed.equalLows, close, "below"),
+    sweep: analyzed.latest,
+  };
+}
+
+export function describeRestingLiquidity(
+  language: OwnerLanguage,
+  resting: RestingLiquidity,
+  candleCount: number,
+): string {
+  if (candleCount < 2) {
+    return copy(language, "liquidity.short");
+  }
+  const parts: string[] = [];
+  if (resting.buySide != null) {
+    parts.push(`${copy(language, "liquidity.buy")} ${resting.buySide}.`);
+  }
+  if (resting.sellSide != null) {
+    parts.push(`${copy(language, "liquidity.sell")} ${resting.sellSide}.`);
+  }
+  if (resting.sweep) {
+    const label = resting.sweep.side === "buy_side" ? "liquidity.sweepBuy" : "liquidity.sweepSell";
+    parts.push(
+      `${copy(language, label)} ${resting.sweep.sweptLevel}. ${copy(language, "liquidity.inside")}`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" ") : copy(language, "liquidity.none");
+}
+
+function closestPool(levels: PriceLevel[], close: number, side: "above" | "below"): number | null {
+  let best: number | null = null;
+  let distance = Number.POSITIVE_INFINITY;
+  for (const level of levels) {
+    if (!Number.isFinite(level.price)) {
+      continue;
+    }
+    if (side === "above" ? !(level.price > close) : !(level.price < close)) {
+      continue;
+    }
+    const gap = Math.abs(level.price - close);
+    if (gap < distance) {
+      distance = gap;
+      best = level.price;
+    }
+  }
+  return best;
 }
 
 function buildSweep(input: {

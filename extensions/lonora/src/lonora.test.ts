@@ -118,7 +118,14 @@ describe("structure", () => {
     ];
     const result = runSpecialist("liquidity-analyst", { candles });
     expect(result.ok).toBe(true);
-    expect(result.summary).toContain("buy_side sweep of 101.5");
+    expect(result.summary).toContain("Buy-side sweep of 101.5");
+    expect(result.summary).toContain("The close came back inside.");
+    expect(result.summary).toContain("Resting sell-side 99.875");
+    expect(result.data.buySide).toBe(101.5);
+    expect(result.data.sellSide).toBe(99.875);
+    const arabic = runSpecialist("liquidity-analyst", { candles, language: "ar" });
+    expect(arabic.summary).toContain("مسح سيولة شرائية عند 101.5");
+    expect(arabic.summary).not.toContain("Buy-side sweep");
   });
 
   it("fails closed when the sample is too short", () => {
@@ -1126,6 +1133,91 @@ describe("market data", () => {
     expect(service.ownerBrief()).toContain("آخر قراءة: السعر قرب قاع النطاق 100–121");
     expect(service.ownerBrief()).not.toContain("Latest structure:");
     expect(service.ownerBrief()).not.toMatch(/%/);
+    store.close();
+  });
+
+  it("keeps the nearest resting liquidity in the gold brief", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    const swept = [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        time: openAt - (12 - index) * 3_600_000,
+        open: 100,
+        high: 100.4,
+        low: 99.6,
+        close: 100,
+      })),
+      { time: openAt - 4 * 3_600_000, open: 100, high: 101.5, low: 99.9, close: 100 },
+      { time: openAt - 3 * 3_600_000, open: 100, high: 101.5, low: 99.85, close: 100 },
+      { time: openAt - 2 * 3_600_000, open: 100, high: 102.2, low: 99.95, close: 100.4 },
+    ];
+    service.readCandles = async () => ({
+      ok: true,
+      candles: swept,
+      price: 100.4,
+      stale: false,
+      invented: false,
+    });
+
+    const closed = await service.monitorOnce(closedAt);
+    expect(closed.dataStatus).toBe("closed");
+    expect(service.recall("101.5", "liquidity_read")).toEqual([]);
+
+    const read = await service.readVisibleCandles(openAt);
+    expect(read.invented).toBe(false);
+    expect(read.buySide).toBe(101.5);
+    expect(read.sellSide).toBe(99.875);
+    expect(read.latestSweep).toMatchObject({ side: "buy_side", sweptLevel: 101.5 });
+    expect(service.ownerBrief()).toContain(
+      "Latest liquidity: Resting buy-side 101.5. Resting sell-side 99.875. Buy-side sweep of 101.5.",
+    );
+    expect(service.ownerBrief()).toContain("The close came back inside.");
+    expect(service.ownerBrief()).not.toMatch(/%/);
+    expect(service.remember("liquidity_read", "invented pool 9999", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief()).not.toContain("9999");
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: hourlyCloses(openAt, [110, 112, 114, 116, 118, 121]),
+      price: 121,
+      stale: false,
+      invented: false,
+    });
+    const replaced = await service.readVisibleCandles(openAt);
+    expect(replaced.buySide).toBeNull();
+    expect(replaced.sellSide).toBeNull();
+    expect(replaced.latestSweep).toBeNull();
+    expect(service.ownerBrief()).toContain(copy("en", "liquidity.none"));
+    expect(service.ownerBrief()).not.toContain("101.5");
+
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.readVisibleCandles(openAt);
+    expect(failed.ok).toBe(false);
+    expect(failed.buySide).toBeNull();
+    expect(failed.sellSide).toBeNull();
+    expect(service.ownerBrief()).toContain(copy("en", "liquidity.none"));
+
+    store.setLanguage("ar");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: swept,
+      price: 100.4,
+      stale: false,
+      invented: false,
+    });
+    await service.readVisibleCandles(openAt);
+    expect(service.ownerBrief()).toContain("آخر سيولة: سيولة شرائية راكدة 101.5.");
+    expect(service.ownerBrief()).toContain("مسح سيولة شرائية عند 101.5.");
+    expect(service.ownerBrief()).not.toContain("Latest liquidity:");
     store.close();
   });
 
