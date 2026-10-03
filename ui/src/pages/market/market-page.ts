@@ -380,6 +380,18 @@ function namedPatternLabel(kind: string) {
   if (kind === "falling_wedge") {
     return t("lonora.market.patternFallingWedge");
   }
+  if (kind === "flag") {
+    return t("lonora.market.patternFlag");
+  }
+  if (kind === "pennant") {
+    return t("lonora.market.patternPennant");
+  }
+  if (kind === "cup_and_handle") {
+    return t("lonora.market.patternCup");
+  }
+  if (kind === "inverse_cup_and_handle") {
+    return t("lonora.market.patternInverseCup");
+  }
   return "";
 }
 

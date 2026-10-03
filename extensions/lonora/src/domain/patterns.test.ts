@@ -217,6 +217,107 @@ describe("swing range stage", () => {
       inventedTarget: false,
     });
   });
+
+  it("names a bull flag only after a close beyond the pause", () => {
+    const candles = bullFlag();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "flag",
+      inventedTarget: false,
+    });
+    expect(["forming", "near_completion"]).toContain(forming.named?.stage);
+    expect(forming.named && forming.named.neckline > forming.named.extreme).toBe(true);
+    expect(forming.named).not.toHaveProperty("target");
+    expect(forming.named).not.toHaveProperty("projectedTarget");
+    expect(describePattern(forming, "en")).toContain("Flag");
+    expect(describePattern(forming, "ar")).toContain("علم");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 116, 113.6, 114.4)]);
+    expect(wicked.named?.kind).toBe("flag");
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 118, 113.6, 117)]);
+    expect(completed.named).toMatchObject({
+      kind: "flag",
+      stage: "completed_unconfirmed",
+      inventedTarget: false,
+    });
+    expect(completed.named).not.toHaveProperty("target");
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 118, 113.6, 117),
+      bar(candles.length + 1, 122, 116, 121),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+    expect(confirmed.named?.inventedTarget).toBe(false);
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 114.8, 108, 110)]);
+    expect(failed.named).toMatchObject({
+      kind: "flag",
+      stage: "failed",
+      inventedTarget: false,
+    });
+  });
+
+  it("names a narrowing pause a pennant", () => {
+    const pattern = classifySwingRange(bullPennant());
+    expect(pattern.named).toMatchObject({
+      kind: "pennant",
+      inventedTarget: false,
+    });
+    expect(["forming", "near_completion"]).toContain(pattern.named?.stage);
+    expect(pattern.named).not.toHaveProperty("target");
+    expect(describePattern(pattern, "en")).toContain("Pennant");
+    expect(describePattern(pattern, "ar")).toContain("راية");
+  });
+
+  it("names a cup and handle only after a close beyond the rim", () => {
+    const candles = cupAndHandle();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "cup_and_handle",
+      neckline: 116,
+      extreme: 108,
+      inventedTarget: false,
+    });
+    expect(forming.named?.stage).not.toBe("completed_unconfirmed");
+    expect(forming.named?.stage).not.toBe("confirmed");
+    expect(forming.named?.stage).not.toBe("failed");
+    expect(forming.named).not.toHaveProperty("target");
+    expect(forming.named).not.toHaveProperty("projectedTarget");
+    expect(describePattern(forming, "en")).toContain("Cup and handle");
+    expect(describePattern(forming, "ar")).toContain("كوب وعروة");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 122, 111.4, 113)]);
+    expect(wicked.named?.kind).toBe("cup_and_handle");
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 120, 111.4, 118)]);
+    expect(completed.named).toMatchObject({
+      kind: "cup_and_handle",
+      stage: "completed_unconfirmed",
+      inventedTarget: false,
+    });
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 120, 111.4, 118),
+      bar(candles.length + 1, 124, 116, 122),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 114, 104, 106)]);
+    expect(failed.named).toMatchObject({
+      kind: "cup_and_handle",
+      stage: "failed",
+      inventedTarget: false,
+    });
+  });
 });
 
 function headAndShoulders(): Candle[] {
@@ -240,6 +341,58 @@ function headAndShoulders(): Candle[] {
   peak(20, 116);
   trough(26);
   peak(32, 108);
+  return candles;
+}
+
+function bullFlag(): Candle[] {
+  const candles: Candle[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    const close = 100 + index * 2;
+    candles.push(bar(index, close + 0.4, close - 0.4, close));
+  }
+  for (let index = 8; index < 15; index += 1) {
+    candles.push(bar(index, 114.8, 113.6, 114.2));
+  }
+  return candles;
+}
+
+function bullPennant(): Candle[] {
+  const candles: Candle[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    const close = 100 + index * 3;
+    candles.push(bar(index, close + 0.8, close - 0.8, close));
+  }
+  for (let index = 8; index < 15; index += 1) {
+    candles.push(bar(index, 121.8, 120.6, 121));
+  }
+  for (let index = 15; index < 18; index += 1) {
+    candles.push(bar(index, 122, 120.5, 121));
+  }
+  for (let index = 18; index < 21; index += 1) {
+    candles.push(bar(index, 121.3, 120.9, 121.1));
+  }
+  return candles;
+}
+
+function cupAndHandle(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 113.4, 112.6, 113));
+  const peak = (index: number, price: number) => {
+    candles[index] = bar(index, price, 112.6, 113);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, price - 2, 112.6, 113);
+    }
+  };
+  const trough = (index: number, price: number) => {
+    candles[index] = bar(index, 113.4, price, Math.min(113, price + 0.4));
+    for (const offset of [-2, -1, 1, 2]) {
+      const low = Math.min(price + 0.6, 113.1);
+      candles[index + offset] = bar(index + offset, 113.4, low, Math.max(low, 113));
+    }
+  };
+  peak(8, 116);
+  trough(16, 108);
+  peak(24, 116);
+  trough(30, 113);
   return candles;
 }
 

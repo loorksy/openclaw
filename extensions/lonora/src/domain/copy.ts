@@ -84,6 +84,10 @@ const COPY = {
     "pattern.symmetrical": "Symmetrical triangle",
     "pattern.risingWedge": "Rising wedge",
     "pattern.fallingWedge": "Falling wedge",
+    "pattern.flag": "Flag",
+    "pattern.pennant": "Pennant",
+    "pattern.cup": "Cup and handle",
+    "pattern.inverseCup": "Inverse cup and handle",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -163,6 +167,10 @@ const COPY = {
     "pattern.symmetrical": "مثلث متماثل",
     "pattern.risingWedge": "وتد صاعد",
     "pattern.fallingWedge": "وتد هابط",
+    "pattern.flag": "علم",
+    "pattern.pennant": "راية",
+    "pattern.cup": "كوب وعروة",
+    "pattern.inverseCup": "كوب وعروة مقلوبان",
   },
 } as const;
 

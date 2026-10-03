@@ -52,7 +52,11 @@ export interface NamedExtreme {
     | "descending_triangle"
     | "symmetrical_triangle"
     | "rising_wedge"
-    | "falling_wedge";
+    | "falling_wedge"
+    | "flag"
+    | "pennant"
+    | "cup_and_handle"
+    | "inverse_cup_and_handle";
   stage: PatternStage;
   neckline: number;
   extreme: number;
@@ -80,12 +84,29 @@ const BOUNDARY_CONFORM_ATR = 0.35;
 const FLAT_SLOPE_ATR_PER_BAR = 0.05;
 const MAX_END_WIDTH_RATIO = 0.8;
 const APEX_CONSUMED_LIMIT = 0.8;
+const IMPULSE_MIN_ATR = 2.5;
+const IMPULSE_MIN_BARS = 5;
+const IMPULSE_MAX_BARS = 10;
+const CONSOLIDATION_MIN_BARS = 3;
+const CONSOLIDATION_MAX_BARS = 20;
+const CONSOLIDATION_MAX_RANGE_ATR = 1.6;
+const MAX_RETRACE_RATIO = 0.6;
+const PENNANT_NARROWING_RATIO = 0.6;
+const MAX_FLAG_STALENESS_BARS = 10;
+const RIM_TOLERANCE_ATR = 0.6;
+const MIN_CUP_DEPTH_ATR = 1.5;
+const MAX_CUP_DEPTH_ATR = 12;
+const MAX_HANDLE_RETRACE = 0.5;
 
 export function classifySwingRange(candles: Candle[]): SwingRangePattern {
   return {
     ...classifyRange(candles),
     named:
-      classifyHeadShoulders(candles) ?? classifyTriangle(candles) ?? classifyDoubleExtreme(candles),
+      classifyHeadShoulders(candles) ??
+      classifyCup(candles) ??
+      classifyTriangle(candles) ??
+      classifyDoubleExtreme(candles) ??
+      classifyFlag(candles),
   };
 }
 
@@ -222,6 +243,14 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
       return copy(language, "pattern.risingWedge");
     case "falling_wedge":
       return copy(language, "pattern.fallingWedge");
+    case "flag":
+      return copy(language, "pattern.flag");
+    case "pennant":
+      return copy(language, "pattern.pennant");
+    case "cup_and_handle":
+      return copy(language, "pattern.cup");
+    case "inverse_cup_and_handle":
+      return copy(language, "pattern.inverseCup");
   }
 }
 
@@ -684,6 +713,229 @@ function lineAt(
   }
   const slope = (last.price - first.price) / (last.index - first.index);
   return first.price + slope * (index - first.index);
+}
+
+function classifyFlag(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < IMPULSE_MIN_BARS + 8) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  for (
+    let impulseEnd = candles.length - CONSOLIDATION_MIN_BARS - 1;
+    impulseEnd >= IMPULSE_MIN_BARS;
+    impulseEnd -= 1
+  ) {
+    for (let span = IMPULSE_MIN_BARS; span <= IMPULSE_MAX_BARS; span += 1) {
+      const impulseStart = impulseEnd - span;
+      if (impulseStart < 0) {
+        break;
+      }
+      const from = candles[impulseStart]!;
+      const to = candles[impulseEnd]!;
+      const net = to.close - from.open;
+      if (Math.abs(net) < IMPULSE_MIN_ATR * atr) {
+        continue;
+      }
+      const direction: "up" | "down" = net > 0 ? "up" : "down";
+      const consolidation = buildConsolidation(candles, impulseEnd, direction, atr);
+      if (!consolidation) {
+        continue;
+      }
+      const consolidationRange = consolidation.high - consolidation.low;
+      if (consolidationRange > CONSOLIDATION_MAX_RANGE_ATR * atr) {
+        continue;
+      }
+      const retrace =
+        direction === "up"
+          ? (to.close - consolidation.low) / Math.abs(net)
+          : (consolidation.high - to.close) / Math.abs(net);
+      if (retrace > MAX_RETRACE_RATIO) {
+        continue;
+      }
+      const lastRelevant = consolidation.resolutionIndex ?? candles.length - 1;
+      if (candles.length - 1 - lastRelevant > MAX_FLAG_STALENESS_BARS) {
+        continue;
+      }
+      const expired =
+        consolidation.resolution === "open" &&
+        candles.length - 1 - impulseEnd > CONSOLIDATION_MAX_BARS;
+      const completed = consolidation.resolution === "breakout";
+      const boundary = direction === "up" ? consolidation.high : consolidation.low;
+      const opposite = direction === "up" ? consolidation.low : consolidation.high;
+      return triangleStage({
+        candles,
+        atr,
+        kind: consolidation.converging ? "pennant" : "flag",
+        neckline: boundary,
+        extreme: opposite,
+        breakIndex: completed ? (consolidation.resolutionIndex ?? null) : null,
+        breakLevel: completed ? boundary : null,
+        failed: consolidation.resolution === "breakdown" || expired,
+      });
+    }
+  }
+  return null;
+}
+
+function buildConsolidation(
+  candles: readonly Candle[],
+  startIndex: number,
+  direction: "up" | "down",
+  atr: number,
+): {
+  endIndex: number;
+  high: number;
+  low: number;
+  converging: boolean;
+  resolution: "breakout" | "breakdown" | "open";
+  resolutionIndex?: number;
+} | null {
+  const tolerance = Math.max(atr * BREAK_BUFFER_ATR, Number.EPSILON);
+  let high = Number.NEGATIVE_INFINITY;
+  let low = Number.POSITIVE_INFINITY;
+  const ranges: number[] = [];
+  let end = startIndex;
+  for (
+    let index = startIndex;
+    index < candles.length && index <= startIndex + CONSOLIDATION_MAX_BARS;
+    index += 1
+  ) {
+    const candle = candles[index]!;
+    const bars = index - startIndex;
+    if (bars >= CONSOLIDATION_MIN_BARS) {
+      if (direction === "up" && candle.close > high + tolerance) {
+        return finishConsolidation(index, "breakout");
+      }
+      if (direction === "down" && candle.close < low - tolerance) {
+        return finishConsolidation(index, "breakout");
+      }
+      if (direction === "up" && candle.close < low - tolerance) {
+        return finishConsolidation(index, "breakdown");
+      }
+      if (direction === "down" && candle.close > high + tolerance) {
+        return finishConsolidation(index, "breakdown");
+      }
+    }
+    high = Math.max(high, candle.high);
+    low = Math.min(low, candle.low);
+    ranges.push(candle.high - candle.low);
+    end = index;
+  }
+  if (end - startIndex < CONSOLIDATION_MIN_BARS) {
+    return null;
+  }
+  return finishConsolidation(undefined, "open");
+
+  function finishConsolidation(
+    resolutionIndex: number | undefined,
+    resolution: "breakout" | "breakdown" | "open",
+  ) {
+    const mid = Math.floor(ranges.length / 2);
+    const width = (slice: number[]) => (slice.length > 0 ? Math.max(...slice) : 0);
+    const early = width(ranges.slice(0, mid));
+    const late = width(ranges.slice(mid));
+    return {
+      endIndex: end,
+      high,
+      low,
+      converging: early > 0 && late <= early * PENNANT_NARROWING_RATIO,
+      resolution,
+      resolutionIndex,
+    };
+  }
+}
+
+function classifyCup(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const swings = swingsWithIndex(candles);
+  const cup = scanCup(candles, swings, atr, false);
+  const inverse = scanCup(candles, swings, atr, true);
+  if (cup && inverse) {
+    return cup.handleIndex >= inverse.handleIndex ? cup.named : inverse.named;
+  }
+  return cup?.named ?? inverse?.named ?? null;
+}
+
+function scanCup(
+  candles: readonly Candle[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+  inverse: boolean,
+): { named: NamedExtreme; handleIndex: number } | null {
+  const rimKind = inverse ? "low" : "high";
+  for (let end = swings.length - 1; end >= 3; end -= 1) {
+    const handle = swings[end]!;
+    const rim2 = swings[end - 1]!;
+    const base = swings[end - 2]!;
+    const rim1 = swings[end - 3]!;
+    if (
+      rim1.type !== rimKind ||
+      rim2.type !== rimKind ||
+      base.type === rimKind ||
+      handle.type === rimKind
+    ) {
+      continue;
+    }
+    const rimLevel = inverse ? Math.min(rim1.price, rim2.price) : Math.max(rim1.price, rim2.price);
+    if (Math.abs(rim1.price - rim2.price) > RIM_TOLERANCE_ATR * atr) {
+      continue;
+    }
+    const depth = Math.abs(rimLevel - base.price);
+    if (depth < MIN_CUP_DEPTH_ATR * atr || depth > MAX_CUP_DEPTH_ATR * atr) {
+      continue;
+    }
+    const span = rim2.index - rim1.index;
+    if (span < 10) {
+      continue;
+    }
+    const basePosition = (base.index - rim1.index) / span;
+    if (basePosition < 0.3 || basePosition > 0.7) {
+      continue;
+    }
+    const handleRetrace = Math.abs(rimLevel - handle.price) / depth;
+    if (handleRetrace > MAX_HANDLE_RETRACE || handle.index - rim2.index < 3) {
+      continue;
+    }
+    const breakDirection = inverse ? "down" : "up";
+    const completion = firstCloseBeyond(candles, handle.index, rimLevel, breakDirection, atr);
+    const invalidationLevel = inverse
+      ? rimLevel + depth * MAX_HANDLE_RETRACE
+      : rimLevel - depth * MAX_HANDLE_RETRACE;
+    const invalidation = firstCloseBeyond(
+      candles,
+      handle.index,
+      invalidationLevel,
+      inverse ? "up" : "down",
+      atr,
+    );
+    const invalidatedFirst =
+      invalidation.breakIndex != null &&
+      (completion.breakIndex == null || invalidation.breakIndex < completion.breakIndex);
+    const completed = completion.breakIndex != null && !invalidatedFirst;
+    return {
+      handleIndex: handle.index,
+      named: triangleStage({
+        candles,
+        atr,
+        kind: inverse ? "inverse_cup_and_handle" : "cup_and_handle",
+        neckline: rimLevel,
+        extreme: base.price,
+        breakIndex: completed ? (completion.breakIndex ?? null) : null,
+        breakLevel: completed ? rimLevel : null,
+        failed: invalidatedFirst,
+      }),
+    };
+  }
+  return null;
 }
 
 function swingsWithIndex(candles: readonly Candle[]): (Swing & { index: number })[] {
