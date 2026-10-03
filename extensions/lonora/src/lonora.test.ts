@@ -251,11 +251,12 @@ describe("owner and providers", () => {
     const secret = "sk-test-secret-value";
     const fetchImpl = async () =>
       new Response(JSON.stringify({ data: [{ id: "claude-test" }] }), { status: 200 });
-    await service.connectProvider({
+    const connected = await service.connectProvider({
       provider: "anthropic",
       apiKey: secret,
       fetchImpl: fetchImpl as typeof fetch,
     });
+    expect(JSON.stringify(connected)).not.toContain(secret);
     const view = service.providerSettings();
     expect(JSON.stringify(view)).not.toContain(secret);
     expect(view.find((row) => row.provider === "anthropic")?.defaultModel).toBe("claude-test");

@@ -216,7 +216,7 @@ export async function runSidebarAttentionScopeFlow(params: SidebarAttentionScope
     await captureProof(params, page, "09-desktop-inbox-writer-agent.png");
     await sidebar.locator(".sidebar-issues-button").click();
 
-    await sidebar.getByRole("link", { name: "Tasks", exact: true }).click();
+    await page.goto(new URL("/automations", page.url()).toString());
     await waitForControlUiRoute(page, { pathname: "/automations", routeId: "cron" });
     const pageScope = page.locator(".agent-scope-control openclaw-agent-select");
     await pageScope.locator(".agent-select__trigger").click();

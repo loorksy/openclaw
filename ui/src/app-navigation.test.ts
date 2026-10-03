@@ -125,9 +125,7 @@ describe("formatDocumentTitle", () => {
   });
 
   it("shows attention separately from the disconnected state", () => {
-    expect(formatDocumentTitle({ context: "Usage", attentionCount: 3 })).toBe(
-      "(3) Usage — Lonora",
-    );
+    expect(formatDocumentTitle({ context: "Usage", attentionCount: 3 })).toBe("(3) Usage — Lonora");
     expect(
       formatDocumentTitle({ context: "Usage", attentionCount: 3, gatewayDisconnected: true }),
     ).toBe("(Disconnected) Usage — Lonora");
@@ -453,10 +451,10 @@ describe("SIDEBAR_NAV_ROUTES", () => {
       "chat",
       "market",
       "recommendations",
-      "cron",
-      "agents-home",
+      "responsibilities",
+      "trading-agents",
       "skills",
-      "usage",
+      "usage-cost",
     ]);
   });
 
@@ -475,7 +473,7 @@ describe("SIDEBAR_NAV_ROUTES", () => {
       "appearance",
       "notifications",
       "channels",
-      "model-providers",
+      "ai-models",
       "advanced",
     ]);
   });

@@ -28,6 +28,7 @@ import { page as aboutPage } from "./pages/about/route.ts";
 import { page as activityPage } from "./pages/activity/route.ts";
 import { page as agentsHomePage } from "./pages/agents-home/route.ts";
 import { page as agentsPage } from "./pages/agents/route.ts";
+import { page as aiModelsPage } from "./pages/ai-models/route.ts";
 import { page as approvalsPage } from "./pages/approvals/route.ts";
 import { page as appsPage } from "./pages/apps/route.ts";
 import { page as channelsPage } from "./pages/channels/route.ts";
@@ -59,6 +60,7 @@ import { pages as pluginsPages } from "./pages/plugins/route.ts";
 import { page as portalsPage } from "./pages/portals/route.ts";
 import { page as profilePage } from "./pages/profile/route.ts";
 import { page as recommendationsPage } from "./pages/recommendations/route.ts";
+import { page as responsibilitiesPage } from "./pages/responsibilities/route.ts";
 import { page as searchPage } from "./pages/search/route.ts";
 import { page as secretsPage } from "./pages/secrets/route.ts";
 import { page as sessionsPage } from "./pages/sessions/route.ts";
@@ -66,6 +68,8 @@ import { page as skillWorkshopPage } from "./pages/skill-workshop/route.ts";
 import { pages as skillsPages } from "./pages/skills/route.ts";
 import { page as systemsPage } from "./pages/systems/route.ts";
 import { page as terminalPage } from "./pages/terminal/route.ts";
+import { page as tradingAgentsPage } from "./pages/trading-agents/route.ts";
+import { page as usageCostPage } from "./pages/usage-cost/route.ts";
 import { page as usagePage } from "./pages/usage/route.ts";
 import { resolveWorkboardRouteLocation } from "./pages/workboard/route-location.ts";
 import { page as workboardPage } from "./pages/workboard/route.ts";
@@ -120,6 +124,10 @@ const APP_ROUTE_TREE = [
   logsPage,
   marketPage,
   recommendationsPage,
+  responsibilitiesPage,
+  tradingAgentsPage,
+  usageCostPage,
+  aiModelsPage,
   skillWorkshopPage,
   ...skillsPages,
   ...pluginsPages,

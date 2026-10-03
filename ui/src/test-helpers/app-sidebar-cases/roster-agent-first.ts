@@ -325,7 +325,7 @@ describe("AppSidebar agent roster", () => {
     expect(row("queued").querySelector(".session-row-draft-indicator")).not.toBeNull();
     expect(row("queued").querySelectorAll(".session-glyph__ring--queued")).toHaveLength(1);
     expect(
-      row("automation").querySelector('.session-row-badge[aria-label="Automations"]'),
+      row("automation").querySelector('.session-row-badge[aria-label="Tasks"]'),
     ).not.toBeNull();
     expect(row("automation").querySelector(".session-row-badge--draft")).not.toBeNull();
     expect(

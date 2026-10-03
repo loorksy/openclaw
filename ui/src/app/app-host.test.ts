@@ -546,7 +546,7 @@ describe("OpenClaw shell server preferences", () => {
   it("refreshes live navigation when a sidebar preference arrives from the gateway", () => {
     vi.stubGlobal("localStorage", createStorageMock());
     resetServerUiPrefsSync();
-    const sidebarEntries = ["route:usage", "session:agent:main:test"];
+    const sidebarEntries = ["route:usage-cost", "session:agent:main:test"];
     const gateway = {
       connection: { gatewayUrl: "ws://sidebar.test" },
       snapshot: { phase: "connected" },

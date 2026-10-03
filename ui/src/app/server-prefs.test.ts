@@ -90,7 +90,7 @@ describe("server preferences", () => {
           textScale: 125,
           sidebarLiveActivity: false,
           chatMessageMaxWidth: "82%",
-          sidebarEntries: ["route:usage", "session:agent:main:test", "route:usage", 7],
+          sidebarEntries: ["route:usage-cost", "session:agent:main:test", "route:usage-cost", 7],
           bogus: true,
         }),
         { onApplied },
@@ -105,7 +105,7 @@ describe("server preferences", () => {
       chatShowToolCalls: false,
       chatPersistCommentary: false,
       chatSendShortcut: "modifier-enter",
-      sidebarEntries: ["route:usage", "session:agent:main:test"],
+      sidebarEntries: ["route:usage-cost", "session:agent:main:test"],
     });
   });
 
@@ -174,9 +174,9 @@ describe("server preferences", () => {
 
   it("preserves a local sidebar edit when only another server preference changes", () => {
     const onApplied = vi.fn();
-    const sidebarEntries = ["route:usage", "session:agent:main:test"];
+    const sidebarEntries = ["route:usage-cost", "session:agent:main:test"];
     applyServerUiPrefs(configWithPrefs({ sidebarEntries, themeMode: "dark" }), { onApplied });
-    patchSettings({ sidebarEntries: ["route:usage"] });
+    patchSettings({ sidebarEntries: ["route:usage-cost"] });
 
     expect(
       applyServerUiPrefs(
@@ -184,7 +184,7 @@ describe("server preferences", () => {
         { onApplied },
       ),
     ).toBe(true);
-    expect(loadSettings().sidebarEntries).toEqual(["route:usage"]);
+    expect(loadSettings().sidebarEntries).toEqual(["route:usage-cost"]);
     expect(loadSettings().themeMode).toBe("light");
     expect(onApplied).toHaveBeenLastCalledWith({ themeMode: "light" });
   });
@@ -547,7 +547,7 @@ describe("server preferences", () => {
 
   it("marks sidebar arrays for replacement", async () => {
     const request = vi.fn<Request>(async () => ({}));
-    const sidebarEntries = ["route:usage"];
+    const sidebarEntries = ["route:usage-cost"];
 
     pushServerUiPrefs(createClient(request), { sidebarEntries });
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());

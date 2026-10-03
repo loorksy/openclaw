@@ -309,21 +309,23 @@ describe("gateway settings and layout persistence", () => {
     const gwUrl = expectedGatewayUrl("");
     saveSettings(
       makeUiSettings(gwUrl, {
-        sidebarEntries: ["route:tasks", "route:cron"],
+        sidebarEntries: ["route:tasks", "route:market"],
         textScale: 100,
       }),
     );
-    expect(loadSettings().sidebarEntries).toEqual(["route:cron"]);
+    expect(loadSettings().sidebarEntries).toEqual(["route:market"]);
     expect(loadSettings().navWidth).toBe(258);
 
     // Corrupt the persisted list; load falls back to the default pinned set.
     writeStored({ ...readStored(), sidebarEntries: "route:tasks", navWidth: 220 });
     expect(loadSettings().sidebarEntries).toEqual([
-      "route:agents-home",
-      "route:dashboards",
-      "route:systems",
-      "route:cron",
-      "route:plugins",
+      "route:chat",
+      "route:market",
+      "route:recommendations",
+      "route:responsibilities",
+      "route:trading-agents",
+      "route:skills",
+      "route:usage-cost",
     ]);
     expect(loadSettings().navWidth).toBe(258);
   });
@@ -354,7 +356,7 @@ describe("gateway settings and layout persistence", () => {
       navWidth: 300,
     });
     if ("sidebarPinnedRoutes" in sidebar) {
-      expect(settings.sidebarEntries).toEqual(["plugin:workboard/workboard", "route:usage"]);
+      expect(settings.sidebarEntries).toEqual(["plugin:workboard/workboard", "route:usage-cost"]);
       expect(readStored().sidebarEntries).toEqual(settings.sidebarEntries);
     }
     saveSettings(settings);

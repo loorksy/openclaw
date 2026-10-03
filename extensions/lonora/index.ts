@@ -394,6 +394,21 @@ export default definePluginEntry({
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(
+      "lonora.tasks.setStatus",
+      handle((params) => {
+        const body = params as { id?: unknown; status?: unknown } | undefined;
+        const status = body?.status;
+        if (
+          typeof body?.id !== "string" ||
+          (status !== "running" && status !== "paused" && status !== "cancelled")
+        ) {
+          throw new Error("id and status are required.");
+        }
+        return requireService().setResponsibilityStatus(body.id, status);
+      }),
+      { scope: "operator.write" },
+    );
+    api.registerGatewayMethod(
       "lonora.agents.list",
       handle(() => requireService().agentsView()),
       {
@@ -411,6 +426,28 @@ export default definePluginEntry({
       "lonora.providers.status",
       handle(() => requireService().providerSettings()),
       { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
+      "lonora.providers.connect",
+      handle(async (params) => {
+        const body = params as { provider?: unknown; apiKey?: unknown } | undefined;
+        if (typeof body?.provider !== "string" || typeof body.apiKey !== "string") {
+          throw new Error("provider and apiKey are required.");
+        }
+        const result = await requireService().connectProvider({
+          provider: body.provider,
+          apiKey: body.apiKey,
+        });
+        return {
+          ok: result.ok,
+          provider: "provider" in result ? result.provider : body.provider,
+          connected: "connected" in result ? result.connected : false,
+          defaultModel: "defaultModel" in result ? result.defaultModel : null,
+          models: "models" in result ? result.models : [],
+          error: result.error ?? null,
+        };
+      }),
+      { scope: "operator.write" },
     );
     api.registerGatewayMethod(
       "lonora.owner.bindTelegram",

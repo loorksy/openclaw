@@ -29,9 +29,9 @@ describe("AppSidebar agent roster pins", () => {
       ]),
     );
     const entries = [
-      "route:usage",
+      "route:usage-cost",
       "session:agent:working:pinned",
-      "route:plugins",
+      "route:skills",
       "session:agent:main:pinned",
       "session:agent:recent:pinned",
     ];
@@ -120,7 +120,7 @@ describe("AppSidebar agent roster pins", () => {
     const { sidebar, context, sessions, result } = await mountRoster(roster, [
       session("working", 2, { key, isMain: false }),
     ]);
-    const entries = ["route:usage", `session:${key}`, "route:plugins"];
+    const entries = ["route:usage-cost", `session:${key}`, "route:skills"];
     sidebar.sidebarEntries = entries;
     const onUpdate = vi.fn((next: string[]) => {
       sidebar.sidebarEntries = next;
@@ -152,8 +152,8 @@ describe("AppSidebar agent roster pins", () => {
       expect(rows[0]?.closest('[data-agent-group="working"]') !== null).toBe(!pinned);
       expect(context.agentSelection.state.selectedId).toBe("main");
     }
-    expect(onUpdate).toHaveBeenLastCalledWith(["route:usage", "route:plugins"]);
-    expect(sidebar.sidebarEntries).toEqual(["route:usage", "route:plugins"]);
+    expect(onUpdate).toHaveBeenLastCalledWith(["route:usage-cost", "route:skills"]);
+    expect(sidebar.sidebarEntries).toEqual(["route:usage-cost", "route:skills"]);
   });
 
   it("keeps a pinned tree in Pages when its agent group is collapsed", async () => {

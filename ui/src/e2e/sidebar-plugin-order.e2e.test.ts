@@ -50,7 +50,7 @@ suite.define(() => {
       ]) {
         expect(await row(key).getAttribute("draggable")).toBe("true");
       }
-      await row("plugin:workboard/workboard").dragTo(row("route:cron"), {
+      await row("plugin:workboard/workboard").dragTo(row("route:responsibilities"), {
         targetPosition: { x: 50, y: 2 },
       });
       await row("plugin:birdclaw/birdclaw").dragTo(row("plugin:workboard/workboard"), {
@@ -67,13 +67,13 @@ suite.define(() => {
       expect(
         expected.slice(
           expected.indexOf("plugin:reports/reports/daily"),
-          expected.indexOf("route:cron") + 1,
+          expected.indexOf("route:responsibilities") + 1,
         ),
       ).toEqual([
         "plugin:reports/reports/daily",
         "plugin:birdclaw/birdclaw",
         "plugin:workboard/workboard",
-        "route:cron",
+        "route:responsibilities",
       ]);
       const reorderWorkboard = row("plugin:workboard/workboard").getByRole("button", {
         name: "Reorder Workboard",

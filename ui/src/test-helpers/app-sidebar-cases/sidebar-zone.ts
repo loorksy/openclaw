@@ -201,13 +201,13 @@ describe("AppSidebar interleaved zone", () => {
         ),
       },
     });
-    sidebar.sidebarEntries = ["route:usage", "session:agent:main:alpha", "route:plugins"];
+    sidebar.sidebarEntries = ["route:usage-cost", "session:agent:main:alpha", "route:skills"];
     await sidebar.updateComplete;
 
     const labels = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-zone-entry")].map((entry) =>
       entry.querySelector(".nav-item__text, .sidebar-recent-session__name")?.textContent?.trim(),
     );
-    expect(labels).toEqual(["Usage", "Alpha", "Plugins"]);
+    expect(labels).toEqual(["Usage & Cost", "Alpha", "Skills"]);
     expect(sidebar.querySelector('[data-session-section="pinned"]')).toBeNull();
     const pinnedRow = sidebar.querySelector('[data-session-key="agent:main:alpha"]');
     const pinnedTree = pinnedRow?.closest(".sidebar-session-tree");
@@ -250,7 +250,7 @@ describe("AppSidebar interleaved zone", () => {
       sidebar.sidebarEntries = entries;
     });
     sidebar.onUpdateSidebarEntries = onUpdate;
-    const target = zoneEntry(sidebar, "route:cron");
+    const target = zoneEntry(sidebar, "route:responsibilities");
     vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 10, 200, 30));
     const dataTransfer = createDataTransferStub();
     dispatchDragEvent(pluginEntry, "dragstart", dataTransfer);
@@ -261,7 +261,9 @@ describe("AppSidebar interleaved zone", () => {
     const ordered = [...sidebar.querySelectorAll<HTMLElement>("[data-sidebar-entry]")].map(
       (row) => row.dataset.sidebarEntry,
     );
-    expect(ordered.indexOf("plugin:logbook/logbook")).toBeLessThan(ordered.indexOf("route:cron"));
+    expect(ordered.indexOf("plugin:logbook/logbook")).toBeLessThan(
+      ordered.indexOf("route:responsibilities"),
+    );
     zoneEntry(sidebar, "plugin:logbook/logbook").querySelector<HTMLAnchorElement>("a")?.click();
     const location = new URL(href, window.location.origin);
     expect(navigate).toHaveBeenCalledWith("plugin", {
@@ -285,7 +287,7 @@ describe("AppSidebar interleaved zone", () => {
   it("reorders default-visible plugin destinations with ordinary pinned pages", async () => {
     const { sidebar, context } = await mountZone();
     pluginNavigation(context, sidebar, ["review", "notes"], true);
-    sidebar.sidebarEntries = ["route:usage"];
+    sidebar.sidebarEntries = ["route:usage-cost"];
     const onUpdate = vi.fn((entries: string[]) => {
       sidebar.sidebarEntries = entries;
     });
@@ -293,7 +295,7 @@ describe("AppSidebar interleaved zone", () => {
     await sidebar.updateComplete;
     const source = zoneEntry(sidebar, "plugin:example/review");
     expect(source.draggable).toBe(true);
-    const target = zoneEntry(sidebar, "route:usage");
+    const target = zoneEntry(sidebar, "route:usage-cost");
     vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 10, 200, 30));
     const dataTransfer = createDataTransferStub();
     dispatchDragEvent(source, "dragstart", dataTransfer);
@@ -302,7 +304,7 @@ describe("AppSidebar interleaved zone", () => {
     await sidebar.updateComplete;
     expect(onUpdate).toHaveBeenLastCalledWith([
       "plugin:example/review",
-      "route:usage",
+      "route:usage-cost",
       "plugin:example/notes",
     ]);
     expect(
@@ -341,10 +343,10 @@ describe("AppSidebar interleaved zone", () => {
   it("hides an unavailable plugin pin without deleting its saved position", async () => {
     const { sidebar, context } = await mountZone();
     pluginNavigation(context, sidebar, []);
-    sidebar.sidebarEntries = ["plugin:example/review", "route:usage"];
+    sidebar.sidebarEntries = ["plugin:example/review", "route:usage-cost"];
     await sidebar.updateComplete;
     expect(sidebar.querySelector('[data-sidebar-entry="plugin:example/review"]')).toBeNull();
-    expect(sidebar.sidebarEntries).toEqual(["plugin:example/review", "route:usage"]);
+    expect(sidebar.sidebarEntries).toEqual(["plugin:example/review", "route:usage-cost"]);
   });
 
   it("offers optional plugin destinations in the pin editor", async () => {
@@ -361,12 +363,12 @@ describe("AppSidebar interleaved zone", () => {
 
   it("writes reordered entries after a route drop", async () => {
     const { sidebar } = await mountZone();
-    sidebar.sidebarEntries = ["route:usage", "route:plugins", "route:cron"];
+    sidebar.sidebarEntries = ["route:usage-cost", "route:skills", "route:responsibilities"];
     const onUpdate = vi.fn();
     sidebar.onUpdateSidebarEntries = onUpdate;
     await sidebar.updateComplete;
-    const source = zoneEntry(sidebar, "route:cron");
-    const target = zoneEntry(sidebar, "route:usage");
+    const source = zoneEntry(sidebar, "route:responsibilities");
+    const target = zoneEntry(sidebar, "route:usage-cost");
     vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
       top: 10,
       height: 20,
@@ -377,17 +379,21 @@ describe("AppSidebar interleaved zone", () => {
     dispatchDragEvent(target, "dragover", dataTransfer, 11);
     dispatchDragEvent(target, "drop", dataTransfer, 11);
 
-    expect(onUpdate).toHaveBeenCalledWith(["route:cron", "route:usage", "route:plugins"]);
+    expect(onUpdate).toHaveBeenCalledWith([
+      "route:responsibilities",
+      "route:usage-cost",
+      "route:skills",
+    ]);
   });
 
   it("pins and inserts a session dropped from Threads", async () => {
     const { sidebar, sessions } = await mountZone();
-    sidebar.sidebarEntries = ["route:usage", "route:plugins"];
+    sidebar.sidebarEntries = ["route:usage-cost", "route:skills"];
     const onUpdate = vi.fn();
     sidebar.onUpdateSidebarEntries = onUpdate;
     await sidebar.updateComplete;
     const source = sidebar.querySelector('[data-session-key="agent:main:alpha"]');
-    const target = zoneEntry(sidebar, "route:plugins");
+    const target = zoneEntry(sidebar, "route:skills");
     if (!source) {
       throw new Error("expected Alpha session row");
     }
@@ -411,9 +417,9 @@ describe("AppSidebar interleaved zone", () => {
     // The slot write waits for the pin patch to land.
     await waitForFast(() =>
       expect(onUpdate).toHaveBeenCalledWith([
-        "route:usage",
+        "route:usage-cost",
         "session:agent:main:alpha",
-        "route:plugins",
+        "route:skills",
       ]),
     );
   });
@@ -435,7 +441,7 @@ describe("AppSidebar interleaved zone", () => {
         sessions: result.sessions.map((row) => (row === alpha ? promoted : row)),
       },
     });
-    sidebar.sidebarEntries = ["route:usage", "route:plugins"];
+    sidebar.sidebarEntries = ["route:usage-cost", "route:skills"];
     const onUpdate = vi.fn();
     sidebar.onUpdateSidebarEntries = onUpdate;
     await sidebar.updateComplete;
@@ -443,7 +449,7 @@ describe("AppSidebar interleaved zone", () => {
     if (!source) {
       throw new Error("expected promoted child session row");
     }
-    const target = zoneEntry(sidebar, "route:plugins");
+    const target = zoneEntry(sidebar, "route:skills");
     const dataTransfer = createDataTransferStub();
     dispatchDragEvent(source, "dragstart", dataTransfer);
     dispatchDragEvent(target, "dragover", dataTransfer);
@@ -457,11 +463,11 @@ describe("AppSidebar interleaved zone", () => {
 
   it("hides a route dropped into the session-list region", async () => {
     const { sidebar } = await mountZone();
-    sidebar.sidebarEntries = ["route:usage", "route:plugins"];
+    sidebar.sidebarEntries = ["route:usage-cost", "route:skills"];
     const onUpdate = vi.fn();
     sidebar.onUpdateSidebarEntries = onUpdate;
     await sidebar.updateComplete;
-    const source = zoneEntry(sidebar, "route:usage");
+    const source = zoneEntry(sidebar, "route:usage-cost");
     const target = sidebar.querySelector('[data-session-section="ungrouped"]');
     if (!target) {
       throw new Error("expected session-list region");
@@ -472,7 +478,7 @@ describe("AppSidebar interleaved zone", () => {
     dispatchDragEvent(target, "dragover", dataTransfer);
     dispatchDragEvent(target, "drop", dataTransfer);
 
-    expect(onUpdate).toHaveBeenCalledWith(["route:plugins"]);
+    expect(onUpdate).toHaveBeenCalledWith(["route:skills"]);
   });
 
   it.each([false, true])(
@@ -480,7 +486,7 @@ describe("AppSidebar interleaved zone", () => {
     async (defaultVisible) => {
       const { sidebar, context } = await mountZone();
       pluginNavigation(context, sidebar, ["review"], defaultVisible);
-      sidebar.sidebarEntries = ["plugin:example/review", "route:usage"];
+      sidebar.sidebarEntries = ["plugin:example/review", "route:usage-cost"];
       const onUpdate = vi.fn();
       sidebar.onUpdateSidebarEntries = onUpdate;
       await sidebar.updateComplete;
@@ -498,7 +504,7 @@ describe("AppSidebar interleaved zone", () => {
       if (defaultVisible) {
         expect(onUpdate).not.toHaveBeenCalled();
       } else {
-        expect(onUpdate).toHaveBeenCalledWith(["route:usage"]);
+        expect(onUpdate).toHaveBeenCalledWith(["route:usage-cost"]);
       }
     },
   );
@@ -517,7 +523,11 @@ describe("AppSidebar interleaved zone", () => {
         ),
       },
     });
-    sidebar.sidebarEntries = ["session:agent:b:remote", "session:agent:main:alpha", "route:usage"];
+    sidebar.sidebarEntries = [
+      "session:agent:b:remote",
+      "session:agent:main:alpha",
+      "route:usage-cost",
+    ];
     const onUpdate = vi.fn();
     sidebar.onUpdateSidebarEntries = onUpdate;
     await sidebar.updateComplete;
@@ -531,7 +541,7 @@ describe("AppSidebar interleaved zone", () => {
       )
       ?.click();
     await waitForFast(() =>
-      expect(onUpdate).toHaveBeenCalledWith(["session:agent:b:remote", "route:usage"]),
+      expect(onUpdate).toHaveBeenCalledWith(["session:agent:b:remote", "route:usage-cost"]),
     );
   });
 
@@ -549,7 +559,7 @@ describe("AppSidebar interleaved zone", () => {
         ),
       },
     });
-    sidebar.sidebarEntries = ["session:agent:main:alpha", "route:usage"];
+    sidebar.sidebarEntries = ["session:agent:main:alpha", "route:usage-cost"];
     await sidebar.updateComplete;
     const alpha = sidebar.querySelector(
       '[data-session-key="agent:main:alpha"] .sidebar-recent-session__link',

@@ -5,33 +5,33 @@ import { reconcileSidebarZone } from "./sidebar-zone.ts";
 describe("reconcileSidebarZone", () => {
   it("preserves route and pinned-session interleaving", () => {
     const result = reconcileSidebarZone(
-      ["route:usage", "session:agent:main:alpha", "route:plugins"],
+      ["route:market", "session:agent:main:alpha", "route:skills"],
       [{ key: "agent:main:alpha" }],
       SIDEBAR_NAV_ROUTES,
     );
 
     expect(result.entries).toEqual([
-      { type: "route", route: "usage" },
+      { type: "route", route: "market" },
       { type: "session", key: "agent:main:alpha" },
-      { type: "route", route: "plugins" },
+      { type: "route", route: "skills" },
     ]);
     expect(result.sidebarEntries).toEqual([
-      "route:usage",
+      "route:market",
       "session:agent:main:alpha",
-      "route:plugins",
+      "route:skills",
     ]);
   });
 
   it("prunes known-unpinned sessions and appends server-pinned sessions", () => {
     const result = reconcileSidebarZone(
-      ["session:agent:main:stale", "route:usage", "session:agent:main:alpha"],
+      ["session:agent:main:stale", "route:market", "session:agent:main:alpha"],
       [{ key: "agent:main:alpha" }, { key: "agent:main:beta" }],
       SIDEBAR_NAV_ROUTES,
       new Set(["agent:main:stale"]),
     );
 
     expect(result.sidebarEntries).toEqual([
-      "route:usage",
+      "route:market",
       "session:agent:main:alpha",
       "session:agent:main:beta",
     ]);
@@ -41,53 +41,53 @@ describe("reconcileSidebarZone", () => {
     // agent-b's pinned session is not loaded in this view; its slot must
     // survive a canonical write or synced prefs lose cross-agent order.
     const result = reconcileSidebarZone(
-      ["session:agent:b:remote", "route:usage", "session:agent:main:alpha"],
+      ["session:agent:b:remote", "route:market", "session:agent:main:alpha"],
       [{ key: "agent:main:alpha" }],
       SIDEBAR_NAV_ROUTES,
       new Set(["agent:main:other"]),
     );
 
     expect(result.entries).toEqual([
-      { type: "route", route: "usage" },
+      { type: "route", route: "market" },
       { type: "session", key: "agent:main:alpha" },
     ]);
     expect(result.sidebarEntries).toEqual([
       "session:agent:b:remote",
-      "route:usage",
+      "route:market",
       "session:agent:main:alpha",
     ]);
   });
 
   it("drops routes outside the supplied valid route set", () => {
     expect(
-      reconcileSidebarZone(["route:usage", "route:plugins"], [], ["usage"]).sidebarEntries,
-    ).toEqual(["route:usage"]);
+      reconcileSidebarZone(["route:market", "route:skills"], [], ["market"]).sidebarEntries,
+    ).toEqual(["route:market"]);
   });
 
   it("migrates shipped Workboard placements to plugin destinations", () => {
     const result = reconcileSidebarZone(
-      ["route:usage", "route:workboard", "workboard:ops"],
+      ["route:market", "route:workboard", "workboard:ops"],
       [],
       SIDEBAR_NAV_ROUTES,
       new Set(),
       new Set(["workboard/workboard", "workboard/board-ops"]),
     );
     expect(result.sidebarEntries).toEqual([
-      "route:usage",
+      "route:market",
       "plugin:workboard/workboard",
       "plugin:workboard/board-ops",
     ]);
     expect(result.entries).toEqual([
-      { type: "route", route: "usage" },
+      { type: "route", route: "market" },
       { type: "plugin", key: "workboard/workboard" },
       { type: "plugin", key: "workboard/board-ops" },
     ]);
   });
 
   it("preserves unavailable plugin positions through reloads and permission loss", () => {
-    const entries = ["plugin:example/review", "route:usage"];
+    const entries = ["plugin:example/review", "route:market"];
     expect(reconcileSidebarZone(entries, [], SIDEBAR_NAV_ROUTES)).toEqual({
-      entries: [{ type: "route", route: "usage" }],
+      entries: [{ type: "route", route: "market" }],
       sidebarEntries: entries,
     });
     expect(
@@ -95,7 +95,7 @@ describe("reconcileSidebarZone", () => {
         .entries,
     ).toEqual([
       { type: "plugin", key: "example/review" },
-      { type: "route", route: "usage" },
+      { type: "route", route: "market" },
     ]);
   });
 });

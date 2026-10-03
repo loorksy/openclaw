@@ -22,10 +22,10 @@ export const SIDEBAR_NAV_ROUTES = [
   "chat",
   "market",
   "recommendations",
-  "cron",
-  "agents-home",
+  "responsibilities",
+  "trading-agents",
   "skills",
-  "usage",
+  "usage-cost",
 ] as const satisfies readonly NavigationRouteId[];
 
 // Routes presented as tabs of the Plugins hub. The sidebar highlights the
@@ -55,12 +55,26 @@ export type SidebarZoneEntry =
 // Keep the highest-value operational destinations visible on first use. Users
 // can still replace this route set through the customize menu.
 export const DEFAULT_SIDEBAR_ENTRIES = (
-  ["chat", "market", "recommendations", "cron", "agents-home", "skills", "usage"] as const
+  [
+    "chat",
+    "market",
+    "recommendations",
+    "responsibilities",
+    "trading-agents",
+    "skills",
+    "usage-cost",
+  ] as const
 ).map((route) => serializeSidebarEntry({ type: "route", route }));
 
 /**
  * Parse the compact persisted representation used by browser and synced prefs.
  */
+const RETIRED_SIDEBAR_ROUTES = {
+  cron: "responsibilities",
+  "agents-home": "trading-agents",
+  usage: "usage-cost",
+} as const satisfies Record<string, PersistedSidebarRoute>;
+
 export function parseSidebarEntry(value: unknown): SidebarZoneEntry | null {
   if (typeof value !== "string") {
     return null;
@@ -70,7 +84,11 @@ export function parseSidebarEntry(value: unknown): SidebarZoneEntry | null {
     if (route === "workboard") {
       return { type: "plugin", key: "workboard/workboard" };
     }
-    return isPersistedSidebarRoute(route) ? { type: "route", route } : null;
+    const migrated =
+      route in RETIRED_SIDEBAR_ROUTES
+        ? RETIRED_SIDEBAR_ROUTES[route as keyof typeof RETIRED_SIDEBAR_ROUTES]
+        : route;
+    return isPersistedSidebarRoute(migrated) ? { type: "route", route: migrated } : null;
   }
   if (value.startsWith("session:")) {
     const key = value.slice("session:".length).trim();
@@ -189,7 +207,7 @@ const SETTINGS_NAVIGATION_GROUPS = [
   { labelKey: null, routes: ["profile", "appearance", "notifications"] },
   { labelKey: "nav.settingsGroupDevice", routes: ["device", "device-permissions"] },
   { labelKey: "nav.settingsGroupConnections", routes: ["channels"] },
-  { labelKey: "nav.settingsGroupAgents", routes: ["model-providers"] },
+  { labelKey: "nav.settingsGroupModels", routes: ["ai-models"] },
   { labelKey: "nav.settingsGroupSystem", routes: ["advanced"] },
 ] as const satisfies readonly SettingsNavigationGroup[];
 
@@ -198,6 +216,7 @@ const NON_ADMIN_SETTINGS_ROUTES: ReadonlySet<NavigationRouteId> = new Set([
   "appearance",
   "notifications",
   "channels",
+  "ai-models",
   "model-providers",
   "advanced",
 ]);
@@ -316,6 +335,10 @@ const NAVIGATION_PRESENTATION: Record<NavigationRouteId, NavigationPresentation>
   "cloud-workers": navigationPresentation("server", "cloudWorkers"),
   market: navigationPresentation("activity", "market"),
   recommendations: navigationPresentation("badgeCheck", "recommendations"),
+  responsibilities: navigationPresentation("calendarClock", "responsibilities"),
+  "trading-agents": navigationPresentation("bot", "tradingAgents"),
+  "usage-cost": navigationPresentation("coins", "usageCost"),
+  "ai-models": navigationPresentation("box", "aiModels"),
   chat: navigationPresentation("messageSquare", "chat"),
   terminal: ["terminal", "terminal.title", "terminal.open"],
   dashboard: navigationPresentation("layoutDashboard", "chat"),
@@ -427,9 +450,7 @@ export function formatDocumentTitle(options: {
   attentionCount?: number;
   gatewayDisconnected?: boolean;
 }): string {
-  const base = options.context.endsWith("Lonora")
-    ? options.context
-    : `${options.context} — Lonora`;
+  const base = options.context.endsWith("Lonora") ? options.context : `${options.context} — Lonora`;
   if (options.gatewayDisconnected) {
     return `(${t("connection.disconnectedTitle")}) ${base}`;
   }

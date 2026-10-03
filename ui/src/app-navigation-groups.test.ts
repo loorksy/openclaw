@@ -147,10 +147,10 @@ describe("sidebar entries", () => {
       "route:chat",
       "route:market",
       "route:recommendations",
-      "route:cron",
-      "route:agents-home",
+      "route:responsibilities",
+      "route:trading-agents",
       "route:skills",
-      "route:usage",
+      "route:usage-cost",
     ]);
     expect(isSettingsNavigationRoute("agents-home")).toBe(false);
   });
@@ -159,7 +159,9 @@ describe("sidebar entries", () => {
     expect(isSessionsHubRoute("sessions")).toBe(true);
     expect(isSessionsHubRoute("worktrees")).toBe(true);
     expect(isSessionsHubRoute("chat")).toBe(false);
-    expect(normalizeSidebarEntries(["route:worktrees", "route:usage"])).toEqual(["route:usage"]);
+    expect(normalizeSidebarEntries(["route:worktrees", "route:usage-cost"])).toEqual([
+      "route:usage-cost",
+    ]);
   });
 
   it("preserves the shipped Workboard placement slot outside customizable routes", () => {
@@ -191,17 +193,17 @@ describe("sidebar entries", () => {
 
   it("keeps model providers visible to the owner and to read-only operators", () => {
     expect(visibleSettingsNavigationGroups(true).flatMap((group) => group.routes)).toContain(
-      "model-providers",
+      "ai-models",
     );
     expect(visibleSettingsNavigationGroups(false).flatMap((group) => group.routes)).toContain(
-      "model-providers",
+      "ai-models",
     );
   });
 
   it("filters admin-only settings while preserving legacy fail-open visibility", () => {
     const nonAdminRoutes = visibleSettingsNavigationGroups(false).flatMap((group) => group.routes);
     expect(nonAdminRoutes).toContain("channels");
-    expect(nonAdminRoutes).toContain("model-providers");
+    expect(nonAdminRoutes).toContain("ai-models");
     expect(nonAdminRoutes).not.toContain("security");
     expect(nonAdminRoutes).not.toContain("communications");
 
@@ -215,7 +217,7 @@ describe("sidebar entries", () => {
   });
 
   it("round-trips route, Workboard, and session entries", () => {
-    expect(parseSidebarEntry("route:usage")).toEqual({ type: "route", route: "usage" });
+    expect(parseSidebarEntry("route:usage-cost")).toEqual({ type: "route", route: "usage-cost" });
     expect(parseSidebarEntry("session:agent:main:test")).toEqual({
       type: "session",
       key: "agent:main:test",
@@ -243,17 +245,17 @@ describe("sidebar entries", () => {
   it("normalizes persisted entries, dropping malformed and duplicate values", () => {
     expect(
       normalizeSidebarEntries([
-        "route:usage",
+        "route:usage-cost",
         "session:agent:main:test",
-        "route:cron",
+        "route:responsibilities",
         "route:tasks",
-        "route:usage",
+        "route:usage-cost",
         "route:worktrees",
         "session:",
         "usage",
         7,
       ]),
-    ).toEqual(["route:usage", "session:agent:main:test", "route:cron"]);
+    ).toEqual(["route:usage-cost", "session:agent:main:test", "route:responsibilities"]);
     expect(normalizeSidebarEntries([])).toEqual([]);
   });
 
@@ -264,10 +266,16 @@ describe("sidebar entries", () => {
   });
 
   it("puts every hidden nav route into the More section", () => {
-    const entries = ["route:cron", "session:agent:main:test", "route:usage"] as const;
+    const entries = [
+      "route:responsibilities",
+      "session:agent:main:test",
+      "route:usage-cost",
+    ] as const;
     const more = sidebarMoreRoutes(entries);
-    expect(more).not.toContain("cron");
-    expect(more).not.toContain("usage");
-    expect(new Set(["cron", "usage", ...more])).toEqual(new Set(SIDEBAR_NAV_ROUTES));
+    expect(more).not.toContain("responsibilities");
+    expect(more).not.toContain("usage-cost");
+    expect(new Set(["responsibilities", "usage-cost", ...more])).toEqual(
+      new Set(SIDEBAR_NAV_ROUTES),
+    );
   });
 });
