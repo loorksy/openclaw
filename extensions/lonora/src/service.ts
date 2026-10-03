@@ -600,6 +600,33 @@ export class LonoraService {
     return this.store.searchMemory(query, kind);
   }
 
+  /** One gold brief for every door. An empty store does not invent a rate. */
+  ownerBrief(): string {
+    const language = this.store.ensureLocalOwner().language;
+    const scenario = this.store.listRecentMemory("scenario", 1);
+    const lessons = this.store.listRecentMemory("lesson", 3);
+    const tasks = this.store
+      .listResponsibilities()
+      .filter((row) => row.status === "running" || row.status === "scheduled")
+      .slice(0, 5);
+    if (scenario.length === 0 && lessons.length === 0 && tasks.length === 0) {
+      return copy(language, "memory.empty");
+    }
+    const lines = [copy(language, "memory.lead")];
+    if (scenario[0]) {
+      lines.push(`${copy(language, "memory.scenario")} ${scenario[0].content}`);
+    }
+    if (lessons.length > 0) {
+      lines.push(
+        `${copy(language, "memory.lessons")} ${lessons.map((row) => row.content).join(" ")}`,
+      );
+    }
+    if (tasks.length > 0) {
+      lines.push(`${copy(language, "memory.tasks")} ${tasks.map((row) => row.title).join("; ")}`);
+    }
+    return lines.join(" ").slice(0, 700);
+  }
+
   upsertResponsibility(input: {
     id?: string;
     title: string;

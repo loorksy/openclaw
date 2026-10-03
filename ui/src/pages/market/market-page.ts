@@ -37,6 +37,7 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
+  @state() private memoryText: string | null = null;
   @state() private historyText: string | null = null;
   @state() private comparing = false;
   @state() private loading = false;
@@ -87,7 +88,11 @@ class MarketPage extends OpenClawLightDomElement {
         return;
       }
       this.snapshot = snapshot;
-      await Promise.all([this.loadCandles(generation), this.loadHeadlines(generation)]);
+      await Promise.all([
+        this.loadCandles(generation),
+        this.loadHeadlines(generation),
+        this.loadMemory(generation),
+      ]);
     } catch (error) {
       if (generation !== this.loadGeneration) {
         return;
@@ -97,6 +102,28 @@ class MarketPage extends OpenClawLightDomElement {
     } finally {
       if (generation === this.loadGeneration) {
         this.loading = false;
+      }
+    }
+  }
+
+  private async loadMemory(generation: number) {
+    const target = lonoraRequestTarget(this.context, "lonora.memory.brief");
+    if (!target.ok) {
+      this.memoryText = null;
+      return;
+    }
+    try {
+      const read = await target.client.request<{ text?: string; invented?: boolean }>(
+        "lonora.memory.brief",
+        {},
+      );
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      this.memoryText = read.invented ? null : (read.text ?? null);
+    } catch {
+      if (generation === this.loadGeneration) {
+        this.memoryText = null;
       }
     }
   }
@@ -239,6 +266,8 @@ class MarketPage extends OpenClawLightDomElement {
                   <dd>${snapshot.assessment ?? snapshot.message}</dd>
                   <dt>${t("lonora.market.calendar")}</dt>
                   <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
+                  <dt>${t("lonora.market.memory")}</dt>
+                  <dd>${this.memoryText ?? t("lonora.market.memoryUnknown")}</dd>
                   <dt>${t("lonora.market.headlines")}</dt>
                   <dd>
                     ${

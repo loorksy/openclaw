@@ -52,6 +52,11 @@ const COPY = {
     "headlines.unavailable":
       "Gold headlines are not available. Lonora will not invent a quiet tape.",
     "headlines.empty": "No gold-relevant headlines are in this window.",
+    "memory.empty": "No gold memory is stored yet.",
+    "memory.lead": "Gold memory.",
+    "memory.scenario": "Scenario:",
+    "memory.lessons": "Lessons:",
+    "memory.tasks": "Responsibilities:",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -99,6 +104,11 @@ const COPY = {
     "cases.rate": "لحظات متشابهة محسومة",
     "headlines.unavailable": "عناوين الذهب غير متاحة. لن تخترع لونورا شريطاً هادئاً.",
     "headlines.empty": "لا عناوين ذات صلة بالذهب في هذه النافذة.",
+    "memory.empty": "لا ذاكرة ذهب مخزّنة بعد.",
+    "memory.lead": "ذاكرة الذهب.",
+    "memory.scenario": "السيناريو:",
+    "memory.lessons": "الدروس:",
+    "memory.tasks": "المسؤوليات:",
   },
 } as const;
 

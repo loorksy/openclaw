@@ -461,6 +461,17 @@ describe("responsibilities, memory, usage", () => {
     expect(second.store.listResponsibilities().map((row) => row.id)).toContain(created.id);
     expect(second.setResponsibilityStatus(created.id, "paused").status).toBe("paused");
     expect(second.recall("New York")[0]?.kind).toBe("lesson");
+    const brief = second.ownerBrief();
+    expect(brief).toContain("New York continuation worked this month");
+    expect(brief).not.toContain("Watch XAUUSD until New York");
+    expect(brief).not.toMatch(/%/);
+    expect(second.ownerBrief()).toBe(brief);
+    second.store.setLanguage("ar");
+    expect(second.ownerBrief()).toContain("ذاكرة الذهب");
+    const empty = new LonoraService(LonoraStore.open(":memory:"));
+    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(empty.ownerBrief()).not.toMatch(/%/);
+    empty.store.close();
     second.store.close();
   });
 

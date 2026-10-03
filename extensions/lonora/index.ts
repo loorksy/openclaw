@@ -126,7 +126,9 @@ export default definePluginEntry({
     });
 
     api.on("before_prompt_build", () => ({
-      prependSystemContext: LONORA_SYSTEM_CONTEXT,
+      prependSystemContext: service
+        ? `${LONORA_SYSTEM_CONTEXT}\n${service.ownerBrief()}`
+        : LONORA_SYSTEM_CONTEXT,
       toolsAllow: [...LONORA_TOOL_ALLOW],
     }));
 
@@ -276,7 +278,11 @@ export default definePluginEntry({
             String(params.content ?? ""),
           );
         }
-        return current.recall(String(params.query ?? ""), params.kind as MemoryKind | undefined);
+        const query = String(params.query ?? "");
+        return {
+          brief: current.ownerBrief(),
+          rows: current.recall(query, params.kind as MemoryKind | undefined),
+        };
       },
     );
     tool(
@@ -414,6 +420,11 @@ export default definePluginEntry({
     api.registerGatewayMethod(
       "lonora.candles.read",
       handle(() => requireService().readVisibleCandles()),
+      { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
+      "lonora.memory.brief",
+      handle(() => ({ text: requireService().ownerBrief(), invented: false as const })),
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(

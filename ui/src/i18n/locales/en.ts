@@ -4791,6 +4791,8 @@ export const en: TranslationMap & {
       calendarUnknown: "The economic calendar has not been read yet.",
       headlines: "Headlines",
       headlinesUnknown: "Gold headlines have not been read yet.",
+      memory: "Gold memory",
+      memoryUnknown: "Gold memory has not been read yet.",
       history: "Earlier moments",
       historyCompare: "Compare earlier moments",
       historyComparing: "Comparing…",

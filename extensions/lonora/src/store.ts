@@ -322,6 +322,25 @@ export class LonoraStore {
     return rows.map((row) => JSON.parse(row.payload) as HistoricalCase);
   }
 
+  listRecentMemory(kind: MemoryKind, limit = 3): MemoryRow[] {
+    const rows = this.db
+      .prepare("SELECT * FROM memories WHERE kind = ? ORDER BY created_at DESC LIMIT ?")
+      .all(kind, limit) as {
+      id: string;
+      kind: MemoryKind;
+      content: string;
+      symbol: string | null;
+      created_at: number;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      content: row.content,
+      symbol: row.symbol,
+      createdAt: row.created_at,
+    }));
+  }
+
   searchMemory(query: string, kind?: MemoryKind): MemoryRow[] {
     const needle = `%${query.toLowerCase()}%`;
     const rows = (
