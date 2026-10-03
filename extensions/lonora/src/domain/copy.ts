@@ -33,6 +33,10 @@ const COPY = {
     "plan.stopBeyond": "Stop sits beyond the structural level",
     "plan.widened": "The distance floor pushed it farther out.",
     "plan.grade": "Zone grade",
+    "cases.insufficient": "Closed history is too short to compare with earlier gold moments.",
+    "cases.none": "No earlier gold moment is similar enough to count.",
+    "cases.counts": "Similar moments are too few for a rate",
+    "cases.rate": "Resolved similar moments",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -64,6 +68,10 @@ const COPY = {
     "plan.stopBeyond": "الوقف يقع بعد المستوى الهيكلي",
     "plan.widened": "حد المسافة دفعه أبعد.",
     "plan.grade": "درجة المنطقة",
+    "cases.insufficient": "التاريخ المغلق أقصر من أن يُقارن بلحظات ذهب سابقة.",
+    "cases.none": "لا توجد لحظة ذهب سابقة قريبة بما يكفي.",
+    "cases.counts": "اللحظات المتشابهة أقل من أن تُنتج نسبة",
+    "cases.rate": "لحظات متشابهة محسومة",
   },
 } as const;
 

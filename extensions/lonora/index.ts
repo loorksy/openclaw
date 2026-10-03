@@ -354,6 +354,14 @@ export default definePluginEntry({
             calendarKnown: calendar.ok,
           });
         }
+        if (agent === "research-agent") {
+          const history = await current.similarHistory();
+          return current.delegate({
+            agent,
+            candles: params.candles as Candle[] | undefined,
+            note: history.text,
+          });
+        }
         return current.delegate({
           agent,
           candles: params.candles as Candle[] | undefined,

@@ -15,6 +15,7 @@ import {
   type EconomicEvent,
 } from "./domain/calendar.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
+import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
 import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
@@ -460,6 +461,26 @@ export class LonoraService {
     return summary;
   }
 
+  async similarHistory(now = Date.now()) {
+    const language = this.store.ensureLocalOwner().language;
+    const read = await this.readCandles(500);
+    if (!read.ok) {
+      return {
+        ok: false as const,
+        indexed: 0,
+        matches: 0,
+        resolved: 0,
+        winRate: null,
+        invented: false as const,
+        text: read.error ?? copy(language, "cases.insufficient"),
+      };
+    }
+    const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
+    const added = this.store.insertCases(indexCandleCases(visible.candles));
+    const report = findSimilarCases(visible.candles, this.store.listCases(), language);
+    return { ok: true as const, indexed: added, invented: false as const, ...report };
+  }
+
   notifyOwner(_key: string, _message: string): never {
     assertPermission({ permission: "NOTIFY", caller: "model", ownerConfirmed: false });
     throw new Error("Model notifications require an owner path outside the model tool.");
@@ -539,7 +560,11 @@ export class LonoraService {
       });
       return { ok: false as const, agent: input.agent, summary, failure: "delegation_limit" };
     }
-    const note = input.agent === "research-agent" ? this.refreshScenarioMemory().text : input.note;
+    const scenario = input.agent === "research-agent" ? this.refreshScenarioMemory().text : "";
+    const note =
+      input.agent === "research-agent"
+        ? [scenario, input.note].filter((part) => part && part.trim().length > 0).join(" ")
+        : input.note;
     const result = runSpecialist(input.agent, {
       ...input,
       note,

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import type { HistoricalCase } from "./domain/cases.js";
 import type { OwnerLanguage, OwnerRecord } from "./domain/owner.js";
 import type { RecommendationPlan } from "./domain/recommendations.js";
 import type { UsageEvent, UsageFeature } from "./domain/usage.js";
@@ -112,6 +113,12 @@ CREATE TABLE IF NOT EXISTS provider_secrets (
   status TEXT NOT NULL,
   last_error TEXT,
   updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_cases (
+  case_time INTEGER NOT NULL,
+  direction TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  PRIMARY KEY (case_time, direction)
 );
 `;
 
@@ -287,6 +294,32 @@ export class LonoraStore {
       this.db.exec("RELEASE lonora_replace_memory");
       throw error;
     }
+  }
+
+  insertCases(cases: HistoricalCase[]): number {
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO market_cases (case_time, direction, payload) VALUES (?, ?, ?)`,
+    );
+    this.db.exec("BEGIN");
+    try {
+      let added = 0;
+      for (const item of cases) {
+        const result = insert.run(item.caseTime, item.direction, JSON.stringify(item));
+        added += Number(result.changes ?? 0);
+      }
+      this.db.exec("COMMIT");
+      return added;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  listCases(): HistoricalCase[] {
+    const rows = this.db
+      .prepare("SELECT payload FROM market_cases ORDER BY case_time ASC")
+      .all() as { payload: string }[];
+    return rows.map((row) => JSON.parse(row.payload) as HistoricalCase);
   }
 
   searchMemory(query: string, kind?: MemoryKind): MemoryRow[] {
