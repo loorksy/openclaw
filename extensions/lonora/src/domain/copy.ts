@@ -37,6 +37,9 @@ const COPY = {
     "cases.none": "No earlier gold moment is similar enough to count.",
     "cases.counts": "Similar moments are too few for a rate",
     "cases.rate": "Resolved similar moments",
+    "headlines.unavailable":
+      "Gold headlines are not available. Lonora will not invent a quiet tape.",
+    "headlines.empty": "No gold-relevant headlines are in this window.",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -72,6 +75,8 @@ const COPY = {
     "cases.none": "لا توجد لحظة ذهب سابقة قريبة بما يكفي.",
     "cases.counts": "اللحظات المتشابهة أقل من أن تُنتج نسبة",
     "cases.rate": "لحظات متشابهة محسومة",
+    "headlines.unavailable": "عناوين الذهب غير متاحة. لن تخترع لونورا شريطاً هادئاً.",
+    "headlines.empty": "لا عناوين ذات صلة بالذهب في هذه النافذة.",
   },
 } as const;
 

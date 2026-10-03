@@ -116,6 +116,7 @@ describe("structure", () => {
     expect(missing.ok).toBe(false);
     expect(missing.failure).toBe("no_macro_context");
     expect(missing.summary).not.toContain("CPI");
+    expect(missing.summary).toContain(copy("en", "headlines.unavailable"));
     const known = runSpecialist("macro-news-analyst", {
       calendarKnown: true,
       events: [
@@ -130,6 +131,23 @@ describe("structure", () => {
     expect(known.ok).toBe(true);
     expect(known.summary).toContain("CPI");
     expect(known.summary).toContain("USD");
+    expect(known.summary).toContain(copy("en", "headlines.unavailable"));
+    expect(known.summary).not.toContain(copy("en", "headlines.empty"));
+    const tape = runSpecialist("macro-news-analyst", {
+      calendarKnown: false,
+      headlinesKnown: true,
+      headlines: [
+        {
+          title: "Gold slips before CPI",
+          source: "Reuters",
+          publishedAt: "2026-01-05T11:00:00.000Z",
+        },
+      ],
+    });
+    expect(tape.ok).toBe(true);
+    expect(tape.summary).toContain("Gold slips before CPI");
+    expect(tape.summary).toContain(copy("en", "calendar.unavailable"));
+    expect(tape.summary).not.toContain("CPI tomorrow");
   });
 });
 
@@ -462,6 +480,9 @@ describe("responsibilities, memory, usage", () => {
     expect(
       checkResponsibility("Watch the economic calendar.", { reasons: ["macro_event"] }, false),
     ).toEqual({ matched: ["macro_event"], waiting: false, closed: false });
+    expect(
+      checkResponsibility("Watch gold news.", { reasons: ["headline_change"] }, false).matched,
+    ).toEqual(["headline_change"]);
   });
 
   it("matches a structure instruction only when structure changes", () => {
@@ -848,6 +869,45 @@ describe("market data", () => {
     store.close();
   });
 
+  it("runs the macro analyst from a real headline and does not invent a price", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    store.saveObservation({
+      candleTime: 1,
+      price: 2300,
+      session: "newyork",
+      marketOpen: false,
+      atr: 1,
+      structureEventKey: null,
+      macroEventKey: "none",
+      headlineKey: "none",
+      recommendationFingerprint: "",
+    });
+    service.readHeadlines = async () => ({
+      ok: true,
+      headlines: [
+        {
+          title: "Gold slips before CPI",
+          source: "Reuters",
+          publishedAt: new Date(closedAt - 60_000).toISOString(),
+        },
+      ],
+      invented: false,
+      stale: false,
+      summary: "Gold slips before CPI from Reuters.",
+    });
+    const result = await service.monitorOnce(closedAt);
+    expect(result.decision.reasons).toContain("headline_change");
+    expect(result.decision.reasons).not.toContain("price_move");
+    expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
+    expect(service.marketSnapshot(closedAt).assessment).toContain("Gold slips before CPI");
+    expect(service.marketSnapshot(closedAt).assessment).toContain(
+      copy("en", "calendar.unavailable"),
+    );
+    store.close();
+  });
+
   it("sends a closed-session notice only when Telegram is bound", async () => {
     const closedAt = Date.parse("2026-01-03T15:00:00Z");
     const previous = {
@@ -1086,8 +1146,9 @@ describe("manual execution", () => {
     };
     const first = service.startMonitor(openAt);
     const second = service.startMonitor(openAt);
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let step = 0; step < 6 && reads === 0; step += 1) {
+      await Promise.resolve();
+    }
     expect(reads).toBe(1);
     release();
     await first;

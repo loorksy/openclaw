@@ -17,6 +17,13 @@ import {
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
+import {
+  describeHeadlines,
+  headlineSetKey,
+  readGoldHeadlines,
+  type HeadlineRead,
+  type NewsHeadline,
+} from "./domain/headlines.js";
 import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
 import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
@@ -49,6 +56,10 @@ export class LonoraService {
   private lastAssessment: string | null = null;
   private lastDataError: string | null = null;
   private lastCalendar: { known: boolean; summary: string | null } = {
+    known: false,
+    summary: null,
+  };
+  private lastHeadlines: { known: boolean; summary: string | null } = {
     known: false,
     summary: null,
   };
@@ -102,6 +113,7 @@ export class LonoraService {
       dataError: this.lastDataError,
       assessment: this.lastAssessment,
       calendar: this.lastCalendar,
+      headlines: this.lastHeadlines,
       recommendations: this.store
         .listRecommendations()
         .filter((plan) => plan.outcome === "pending"),
@@ -187,6 +199,29 @@ export class LonoraService {
     return readGoldCandles(count);
   }
 
+  async readHeadlines(now = Date.now()): Promise<HeadlineRead & { summary: string }> {
+    const language = this.store.ensureLocalOwner().language;
+    try {
+      const read = await readGoldHeadlines({ now });
+      const summary = read.ok
+        ? describeHeadlines(read.headlines, language)
+        : copy(language, "headlines.unavailable");
+      this.lastHeadlines = { known: read.ok, summary };
+      return { ...read, summary };
+    } catch (error) {
+      const summary = copy(language, "headlines.unavailable");
+      this.lastHeadlines = { known: false, summary };
+      return {
+        ok: false,
+        headlines: [],
+        invented: false,
+        stale: false,
+        summary,
+        error: error instanceof Error ? error.message.slice(0, 180) : summary,
+      };
+    }
+  }
+
   async readCalendar(now = Date.now()): Promise<CalendarRead & { summary: string }> {
     const language = this.store.ensureLocalOwner().language;
     try {
@@ -256,10 +291,16 @@ export class LonoraService {
   async monitorOnce(now = Date.now()) {
     const clock = readMarketClock(now);
     const previous = this.store.getObservation<Observation>();
-    const calendar = await this.readCalendar(now);
+    const [calendar, headlines] = await Promise.all([
+      this.readCalendar(now),
+      this.readHeadlines(now),
+    ]);
     const macroEventKey = calendar.ok
       ? upcomingHighImpactKey(calendar.events, now)
       : (previous?.macroEventKey ?? null);
+    const headlineKey = headlines.ok
+      ? headlineSetKey(headlines.headlines)
+      : (previous?.headlineKey ?? null);
     let price = previous?.price ?? null;
     let candleTime = previous?.candleTime ?? null;
     let atr = previous?.atr ?? null;
@@ -301,6 +342,7 @@ export class LonoraService {
       structureEventKey,
       sweepKey: sweep,
       macroEventKey,
+      headlineKey,
       recommendationFingerprint: this.store
         .listRecommendations()
         .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
@@ -325,11 +367,16 @@ export class LonoraService {
         const result = this.delegate({ agent, candles });
         this.lastAssessment = "summary" in result ? result.summary : null;
       }
-      if (observed.decision.reasons.includes("macro_event") && calendar.ok) {
+      const macroDeep =
+        (observed.decision.reasons.includes("macro_event") && calendar.ok) ||
+        (observed.decision.reasons.includes("headline_change") && headlines.ok);
+      if (macroDeep) {
         const result = this.delegate({
           agent: "macro-news-analyst",
           events: calendar.events,
-          calendarKnown: true,
+          calendarKnown: calendar.ok,
+          headlines: headlines.headlines,
+          headlinesKnown: headlines.ok,
         });
         this.lastAssessment = "summary" in result ? result.summary : this.lastAssessment;
       }
@@ -596,6 +643,8 @@ export class LonoraService {
     note?: string;
     events?: EconomicEvent[];
     calendarKnown?: boolean;
+    headlines?: NewsHeadline[];
+    headlinesKnown?: boolean;
     depth?: number;
     childCount?: number;
     parentRunId?: string;
@@ -766,7 +815,7 @@ function purposeFor(agent: SpecialistId): string {
     case "multi-timeframe-analyst":
       return "Compare the working timeframe with the higher timeframe bias.";
     case "macro-news-analyst":
-      return "Read the economic calendar. It does not invent events.";
+      return "Read the economic calendar and gold headlines. A failed feed stays unknown.";
     case "risk-reviewer":
       return "Grade reward against stop distance.";
     case "research-agent":

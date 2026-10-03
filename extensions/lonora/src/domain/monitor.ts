@@ -14,6 +14,8 @@ export interface Observation {
   sweepKey?: string | null;
   /** Nearest high-impact calendar key. Absent on observations stored before the calendar. */
   macroEventKey?: string | null;
+  /** Latest gold-headline set. Null means the feed is unknown, not quiet. */
+  headlineKey?: string | null;
   recommendationFingerprint: string;
 }
 
@@ -33,27 +35,39 @@ export function decideMonitorAction(
   if (!next.marketOpen) {
     const sessionChanged = previous != null && previous.session !== next.session;
     const macro = macroAlert(previous, next);
+    const headlines = headlineAlert(previous, next);
     const reasons = [
       ...(sessionChanged ? ["session_transition_while_closed"] : []),
       ...(macro ? ["macro_event"] : []),
+      ...(headlines ? ["headline_change"] : []),
     ];
     return {
       material: reasons.length > 0,
       reasons: reasons.length > 0 ? reasons : ["market_closed"],
-      deepAnalysis: macro,
+      deepAnalysis: macro || headlines,
       notificationKeys: [
         ...(sessionChanged ? [`session:${next.session}:closed`] : []),
         ...(macro ? [`macro_event:${next.macroEventKey}`] : []),
+        ...(headlines ? [`headline:${next.headlineKey}`] : []),
       ],
     };
   }
   if (!previous) {
     const macro = macroAlert(null, next);
+    const headlines = headlineAlert(null, next);
+    const reasons = [
+      "baseline",
+      ...(macro ? ["macro_event"] : []),
+      ...(headlines ? ["headline_change"] : []),
+    ];
     return {
-      material: macro,
-      reasons: macro ? ["baseline", "macro_event"] : ["baseline"],
-      deepAnalysis: macro,
-      notificationKeys: macro ? [`macro_event:${next.macroEventKey}`] : [],
+      material: macro || headlines,
+      reasons,
+      deepAnalysis: macro || headlines,
+      notificationKeys: [
+        ...(macro ? [`macro_event:${next.macroEventKey}`] : []),
+        ...(headlines ? [`headline:${next.headlineKey}`] : []),
+      ],
     };
   }
   const reasons: string[] = [];
@@ -92,6 +106,9 @@ export function decideMonitorAction(
   if (macroAlert(previous, next)) {
     reasons.push("macro_event");
   }
+  if (headlineAlert(previous, next)) {
+    reasons.push("headline_change");
+  }
   const meaningful = reasons.some((reason) =>
     [
       "price_move",
@@ -101,6 +118,7 @@ export function decideMonitorAction(
       "recommendation_change",
       "liquidity_sweep",
       "macro_event",
+      "headline_change",
     ].includes(reason),
   );
   const deepAnalysis = reasons.some((reason) =>
@@ -110,6 +128,7 @@ export function decideMonitorAction(
       "volatility_change",
       "liquidity_sweep",
       "macro_event",
+      "headline_change",
     ].includes(reason),
   );
   return {
@@ -120,7 +139,9 @@ export function decideMonitorAction(
       ? reasons.map((reason) =>
           reason === "macro_event"
             ? `macro_event:${next.macroEventKey}`
-            : `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`,
+            : reason === "headline_change"
+              ? `headline:${next.headlineKey}`
+              : `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`,
         )
       : [],
   };
@@ -132,6 +153,14 @@ function macroAlert(previous: Observation | null, next: Observation): boolean {
     return false;
   }
   return key !== (previous?.macroEventKey ?? null);
+}
+
+function headlineAlert(previous: Observation | null, next: Observation): boolean {
+  const key = next.headlineKey ?? null;
+  if (!key || key === "none") {
+    return false;
+  }
+  return key !== (previous?.headlineKey ?? null);
 }
 
 export interface NoticeRecord {

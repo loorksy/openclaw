@@ -237,6 +237,12 @@ export default definePluginEntry({
       () => requireService().readCalendar(),
     );
     tool(
+      "lonora_headlines",
+      "Read gold headlines. A failed or unconfigured feed stays unknown and does not invent a quiet tape.",
+      Type.Object({}),
+      () => requireService().readHeadlines(),
+    );
+    tool(
       "lonora_recommendations",
       "List, grade, or prepare an XAUUSD recommendation from closed candles. Preparing a plan does not place an order.",
       Type.Object({
@@ -347,11 +353,16 @@ export default definePluginEntry({
         const current = requireService();
         const agent = String(params.agent) as SpecialistId;
         if (agent === "macro-news-analyst") {
-          const calendar = await current.readCalendar();
+          const [calendar, headlines] = await Promise.all([
+            current.readCalendar(),
+            current.readHeadlines(),
+          ]);
           return current.delegate({
             agent,
             events: calendar.events,
             calendarKnown: calendar.ok,
+            headlines: headlines.headlines,
+            headlinesKnown: headlines.ok,
           });
         }
         if (agent === "research-agent") {
@@ -403,6 +414,11 @@ export default definePluginEntry({
     api.registerGatewayMethod(
       "lonora.candles.read",
       handle(() => requireService().readVisibleCandles()),
+      { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
+      "lonora.headlines.read",
+      handle(() => requireService().readHeadlines()),
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(

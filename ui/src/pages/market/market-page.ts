@@ -23,6 +23,7 @@ type MarketSnapshot = {
   dataError?: string | null;
   assessment?: string | null;
   calendar?: { known: boolean; summary: string | null };
+  headlines?: { known: boolean; summary: string | null };
 };
 
 class MarketPage extends OpenClawLightDomElement {
@@ -35,6 +36,7 @@ class MarketPage extends OpenClawLightDomElement {
     null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
+  @state() private headlineText: string | null = null;
   @state() private historyText: string | null = null;
   @state() private comparing = false;
   @state() private loading = false;
@@ -85,7 +87,7 @@ class MarketPage extends OpenClawLightDomElement {
         return;
       }
       this.snapshot = snapshot;
-      await this.loadCandles(generation);
+      await Promise.all([this.loadCandles(generation), this.loadHeadlines(generation)]);
     } catch (error) {
       if (generation !== this.loadGeneration) {
         return;
@@ -96,6 +98,35 @@ class MarketPage extends OpenClawLightDomElement {
       if (generation === this.loadGeneration) {
         this.loading = false;
       }
+    }
+  }
+
+  private async loadHeadlines(generation: number) {
+    const target = lonoraRequestTarget(this.context, "lonora.headlines.read");
+    if (!target.ok) {
+      this.headlineText = null;
+      return;
+    }
+    try {
+      const read = await target.client.request<{
+        ok: boolean;
+        summary?: string;
+        invented?: boolean;
+        headlines?: { title: string }[];
+      }>("lonora.headlines.read", {});
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      if (read.invented) {
+        this.headlineText = null;
+        return;
+      }
+      this.headlineText = read.summary ?? t("lonora.market.headlinesUnknown");
+    } catch {
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      this.headlineText = null;
     }
   }
 
@@ -208,6 +239,14 @@ class MarketPage extends OpenClawLightDomElement {
                   <dd>${snapshot.assessment ?? snapshot.message}</dd>
                   <dt>${t("lonora.market.calendar")}</dt>
                   <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
+                  <dt>${t("lonora.market.headlines")}</dt>
+                  <dd>
+                    ${
+                      this.headlineText ??
+                      snapshot.headlines?.summary ??
+                      t("lonora.market.headlinesUnknown")
+                    }
+                  </dd>
                 </dl>
                 <h2>${t("lonora.market.history")}</h2>
                 <button

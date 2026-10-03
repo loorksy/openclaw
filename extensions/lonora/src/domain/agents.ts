@@ -14,6 +14,7 @@ import {
   type Candle,
 } from "./candles.js";
 import { copy } from "./copy.js";
+import { describeHeadlines, type NewsHeadline } from "./headlines.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import type { OwnerLanguage } from "./owner.js";
 import { detectStructureEvents, latestStructureEvent } from "./structure.js";
@@ -198,6 +199,8 @@ export function runSpecialist(
     note?: string;
     events?: EconomicEvent[];
     calendarKnown?: boolean;
+    headlines?: NewsHeadline[];
+    headlinesKnown?: boolean;
     language?: OwnerLanguage;
   },
 ): SpecialistResult {
@@ -222,21 +225,35 @@ export function runSpecialist(
       });
     case "macro-news-analyst": {
       const language = input.language ?? "en";
-      if (!input.calendarKnown) {
+      const calendarKnown = input.calendarKnown === true;
+      const headlinesKnown = input.headlinesKnown === true;
+      if (!calendarKnown && !headlinesKnown) {
         return {
           agent: id,
           ok: false,
-          summary: copy(language, "calendar.unavailable"),
-          data: { calendarKnown: false },
+          summary: `${copy(language, "calendar.unavailable")} ${copy(language, "headlines.unavailable")}`,
+          data: { calendarKnown: false, headlinesKnown: false },
           failure: "no_macro_context",
         };
       }
-      const events = input.events ?? [];
+      const summary = [
+        calendarKnown
+          ? describeCalendarEvents(input.events ?? [], language)
+          : copy(language, "calendar.unavailable"),
+        headlinesKnown
+          ? describeHeadlines(input.headlines ?? [], language)
+          : copy(language, "headlines.unavailable"),
+      ].join(" ");
       return {
         agent: id,
         ok: true,
-        summary: describeCalendarEvents(events, language),
-        data: { calendarKnown: true, count: events.length },
+        summary,
+        data: {
+          calendarKnown,
+          headlinesKnown,
+          count: (input.events ?? []).length,
+          headlines: (input.headlines ?? []).length,
+        },
       };
     }
     case "research-agent": {
