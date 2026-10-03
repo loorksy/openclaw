@@ -1027,6 +1027,8 @@ describe("market data", () => {
     expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
     expect(service.marketSnapshot(closedAt).invented).toBe(false);
     expect(service.marketSnapshot(closedAt).calendar).toMatchObject({ known: false });
+    expect(service.ownerBrief()).not.toContain("2300");
+    expect(service.recall("2300", "market_observation")).toEqual([]);
     store.close();
   });
 
@@ -1064,6 +1066,14 @@ describe("market data", () => {
     expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
     expect(service.marketSnapshot(closedAt).assessment).toContain("CPI");
     expect(store.listAgentRuns()[0]).toMatchObject({ agent: "macro-news-analyst", status: "ok" });
+    expect(service.ownerBrief()).toContain("Latest observation:");
+    expect(service.ownerBrief()).toContain("A high-impact gold event is near.");
+    expect(service.recall("high-impact", "market_observation")).toHaveLength(1);
+    expect(service.ownerBrief()).not.toContain("2300");
+    await service.monitorOnce(closedAt);
+    expect(service.recall("high-impact", "market_observation")).toHaveLength(1);
+    store.setLanguage("ar");
+    expect(service.ownerBrief()).toContain("آخر ملاحظة:");
     store.close();
   });
 

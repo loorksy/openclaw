@@ -138,14 +138,13 @@ export class LonoraService {
       this.store.saveObservation(next);
     }
     const owner = this.store.ensureLocalOwner();
-    return {
-      decision,
-      message: decision.material
-        ? decision.notificationKeys
-            .map((key) => this.noticeText(owner.language, key, now))
-            .join(" ")
-        : copy(owner.language, "notify.unchanged"),
-    };
+    const message = decision.material
+      ? decision.notificationKeys.map((key) => this.noticeText(owner.language, key, now)).join(" ")
+      : copy(owner.language, "notify.unchanged");
+    if (decision.material && message.trim()) {
+      this.store.replaceMemory("market_observation", "XAUUSD", message.slice(0, 240));
+    }
+    return { decision, message };
   }
 
   async publishNotices(
@@ -647,16 +646,25 @@ export class LonoraService {
     const language = this.store.ensureLocalOwner().language;
     const scenario = this.store.listRecentMemory("scenario", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
+    const observation = this.store.listRecentMemory("market_observation", 1);
     const tasks = this.store
       .listResponsibilities()
       .filter((row) => row.status === "running" || row.status === "scheduled")
       .slice(0, 5);
-    if (scenario.length === 0 && lessons.length === 0 && tasks.length === 0) {
+    if (
+      scenario.length === 0 &&
+      lessons.length === 0 &&
+      observation.length === 0 &&
+      tasks.length === 0
+    ) {
       return copy(language, "memory.empty");
     }
     const lines = [copy(language, "memory.lead")];
     if (scenario[0]) {
       lines.push(`${copy(language, "memory.scenario")} ${scenario[0].content}`);
+    }
+    if (observation[0]) {
+      lines.push(`${copy(language, "memory.observation")} ${observation[0].content}`);
     }
     if (lessons.length > 0) {
       lines.push(
