@@ -40,6 +40,7 @@ import { classifySwingRange } from "./domain/patterns.js";
 import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
+import { computeRangePosition } from "./domain/range-position.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
@@ -254,6 +255,7 @@ export class LonoraService {
         candles: [] as Candle[],
         pattern: null,
         candleShape: null,
+        range: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -271,6 +273,10 @@ export class LonoraService {
       latestSweep: liquidity.latest,
       pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
       candleShape: visible.candles.length > 0 ? latestCandleShape(visible.candles) : null,
+      range:
+        visible.candles.length > 0
+          ? computeRangePosition(visible.candles, visible.candles.at(-1)?.close ?? null)
+          : null,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",

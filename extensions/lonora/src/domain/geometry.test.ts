@@ -83,6 +83,8 @@ describe("prepare gold plan", () => {
     expect(prepared.plan.rationale).toContain("The spread was not read");
     expect(prepared.plan.rationale).not.toContain("Net reward after spread");
     expect(prepared.plan.rationale).toContain("The higher timeframe was not read.");
+    expect(prepared.plan.rationale).toContain("Price is in the discount of");
+    expect(prepared.plan.rationale).not.toContain("does not favor an immediate entry");
     expect(prepared.plan.outcome).toBe("pending");
     expect(prepared.plan.rationale).toContain("2296");
     expect(prepared.plan.rationale).toMatch(/Zone grade [AB]/);

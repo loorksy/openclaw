@@ -27,6 +27,7 @@ import {
 } from "./geometry.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import type { OwnerLanguage } from "./owner.js";
+import { computeRangePosition, describeRange, positionDisfavorsEntry } from "./range-position.js";
 import type { RecommendationPlan } from "./recommendations.js";
 import { rangeSpan, scoreZone, type ZoneScore } from "./score-poi.js";
 import { detectStructureEvents } from "./structure.js";
@@ -117,6 +118,12 @@ export function prepareGoldPlan(
       : path?.class === "neutral_path"
         ? `${copy(language, "plan.pathNeutral")} `
         : "";
+  const range = computeRangePosition(visible, last.close);
+  const rangeLine = range
+    ? `${describeRange(language, range)}. ${
+        positionDisfavorsEntry(range.label, action) ? `${copy(language, "plan.rangeWait")} ` : ""
+      }`
+    : "";
   const quality = describePlanQuality({
     action,
     entry,
@@ -138,7 +145,7 @@ export function prepareGoldPlan(
     outcome: "pending",
     createdCandleTime: last.time,
     createdAt: now,
-    rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}. ${pathLine}${copy(language, "plan.targets")} ${targets.join(", ")}. ${quality}`,
+    rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}. ${pathLine}${rangeLine}${copy(language, "plan.targets")} ${targets.join(", ")}. ${quality}`,
   };
   return { ok: true, plan, invented: false, brokerCalled: false };
 }

@@ -39,6 +39,7 @@ class MarketPage extends OpenClawLightDomElement {
     null;
   @state() private pattern: SwingRangeView | null = null;
   @state() private candleShape: CandleShapeView | null = null;
+  @state() private dealingRange: DealingRangeView | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -79,6 +80,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.pattern = null;
       this.candleShape = null;
+      this.dealingRange = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -209,6 +211,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.pattern = null;
       this.candleShape = null;
+      this.dealingRange = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -219,6 +222,7 @@ class MarketPage extends OpenClawLightDomElement {
         latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
         pattern?: SwingRangeView | null;
         candleShape?: CandleShapeView | null;
+        range?: DealingRangeView | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -233,6 +237,7 @@ class MarketPage extends OpenClawLightDomElement {
         read.invented || read.candleShape?.inventedTarget !== false
           ? null
           : (read.candleShape ?? null);
+      this.dealingRange = read.invented || read.range?.invented !== false ? null : read.range;
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -242,6 +247,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.pattern = null;
       this.candleShape = null;
+      this.dealingRange = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -308,6 +314,8 @@ class MarketPage extends OpenClawLightDomElement {
                 <p role="status">${this.historyText ?? t("lonora.market.historyEmpty")}</p>
                 <h2>${t("lonora.market.chart")}</h2>
                 ${renderChart(this.candles, this.chartError)}
+                <h2>${t("lonora.market.range")}</h2>
+                <p>${rangeText(this.dealingRange, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.sweep")}</h2>
                 <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.pattern")}</h2>
@@ -342,6 +350,13 @@ class MarketPage extends OpenClawLightDomElement {
   }
 }
 
+type DealingRangeView = {
+  high: number;
+  low: number;
+  label: "premium" | "discount" | "mid_range" | "near_high" | "near_low";
+  invented: false;
+};
+
 type CandleShapeView = {
   name: string;
   inventedTarget: false;
@@ -354,6 +369,32 @@ type SwingRangeView = {
   inventedTarget: false;
   named?: { kind: string; inventedTarget: false } | null;
 };
+
+function rangeText(range: DealingRangeView | null, error: string | null, candleCount: number) {
+  if (!range || range.invented !== false) {
+    if (error && candleCount === 0) {
+      return t("lonora.market.chartUnavailable");
+    }
+    return t("lonora.market.rangeUnknown");
+  }
+  const label = rangeLabel(range.label);
+  return label ? `${label} ${range.low}–${range.high}` : t("lonora.market.rangeUnknown");
+}
+
+function rangeLabel(label: DealingRangeView["label"]) {
+  switch (label) {
+    case "premium":
+      return t("lonora.market.rangePremium");
+    case "discount":
+      return t("lonora.market.rangeDiscount");
+    case "mid_range":
+      return t("lonora.market.rangeMid");
+    case "near_high":
+      return t("lonora.market.rangeNearHigh");
+    case "near_low":
+      return t("lonora.market.rangeNearLow");
+  }
+}
 
 function candleText(shape: CandleShapeView | null, error: string | null, candleCount: number) {
   if (!shape || shape.inventedTarget !== false) {
