@@ -12,6 +12,8 @@ import {
   type ActivationEvidence,
   type ActivationRule,
 } from "./activation-rule.js";
+import { calculateAtr } from "./candles.js";
+import { entryFillTolerance, resolveFill, resolveTargetHit, targetHitTolerance } from "./fill.js";
 
 export type RecommendationStatus =
   | "pending_entry"
@@ -103,8 +105,13 @@ export function isTerminal(outcome: RecommendationOutcome): boolean {
   return outcome !== "pending";
 }
 
-function targetHit(direction: Direction, candle: TrackerCandle, target: number): boolean {
-  return direction === "buy" ? candle.high >= target : candle.low <= target;
+function targetHit(
+  direction: Direction,
+  candle: TrackerCandle,
+  target: number,
+  tolerance: number,
+): boolean {
+  return resolveTargetHit({ direction, candle, target, tolerance }).reached;
 }
 
 function stopHit(
@@ -122,13 +129,20 @@ function stopHit(
 function filled(
   plan: RecommendationPlan,
   candle: TrackerCandle,
+  tolerance: number,
 ): { filled: boolean; price?: number } {
   if (plan.entryType === "market") {
     return { filled: true, price: plan.effectiveEntry ?? plan.entry };
   }
   if (plan.entryType === "limit_touch") {
-    const touched = plan.direction === "buy" ? candle.low <= plan.entry : candle.high >= plan.entry;
-    return touched ? { filled: true, price: plan.entry } : { filled: false };
+    const fill = resolveFill({
+      plan: { direction: plan.direction, entryType: "limit_touch", entry: plan.entry },
+      candle,
+      conditionMet: true,
+      armedBefore: false,
+      tolerance,
+    });
+    return { filled: fill.filled, price: fill.effectiveEntry };
   }
   const confirmed =
     plan.direction === "buy" ? candle.close >= plan.entry : candle.close <= plan.entry;
@@ -166,6 +180,9 @@ export function evaluateRecommendation(
   const mode =
     plan.invalidationMode ??
     (parsedRule ? "close" : plan.entryType === "market" ? "touch" : "close");
+  const atr = calculateAtr(candles);
+  const fillTolerance = entryFillTolerance({ price: plan.entry, atr });
+  const tpTolerance = targetHitTolerance({ price: plan.entry, atr });
   const targets = plan.targets.slice(0, 3);
   const future = candles
     .filter((candle) => candle.time > plan.createdCandleTime)
@@ -205,7 +222,7 @@ export function evaluateRecommendation(
   for (const candle of future) {
     if (!triggered) {
       if (parsedRule === "blocked") {
-        if (targets[0] != null && targetHit(plan.direction, candle, targets[0])) {
+        if (targets[0] != null && targetHit(plan.direction, candle, targets[0], tpTolerance)) {
           missedWithoutFill = true;
           return finish("expired", "expired");
         }
@@ -225,13 +242,13 @@ export function evaluateRecommendation(
           ? { filled: true, price: candle.close }
           : { filled: false }
         : !activation || conditionMet || wasArmed
-          ? filled(plan, candle)
+          ? filled(plan, candle, fillTolerance)
           : { filled: false };
       if (activation && conditionMet) {
         armedBefore = true;
       }
       if (!fill.filled) {
-        if (targets[0] != null && targetHit(plan.direction, candle, targets[0])) {
+        if (targets[0] != null && targetHit(plan.direction, candle, targets[0], tpTolerance)) {
           missedWithoutFill = true;
           return finish("expired", "expired");
         }
@@ -255,7 +272,7 @@ export function evaluateRecommendation(
     let reachedNow = 0;
     for (let index = highest; index < targets.length; index += 1) {
       const target = targets[index];
-      if (target == null || !targetHit(plan.direction, candle, target)) {
+      if (target == null || !targetHit(plan.direction, candle, target, tpTolerance)) {
         break;
       }
       reachedNow = index + 1;

@@ -123,6 +123,30 @@ describe("recommendations", () => {
     expect(evaluation.outcome).toBe("pending");
   });
 
+  it("fills a gold limit inside the 10 point band at the traded price", () => {
+    const evaluation = evaluateRecommendation(plan(), [
+      { time: 2_000, open: 2288, high: 2292, low: 2284, close: 2288 },
+    ]);
+    expect(evaluation.triggered).toBe(true);
+    expect(evaluation.effectiveEntry).toBe(2292);
+  });
+
+  it("does not fill a gold limit that stays outside the band", () => {
+    const evaluation = evaluateRecommendation(plan(), [
+      { time: 2_000, open: 2270, high: 2280, low: 2260, close: 2275 },
+    ]);
+    expect(evaluation.triggered).toBe(false);
+  });
+
+  it("counts a near target and does not widen the stop", () => {
+    const evaluation = evaluateRecommendation(
+      plan({ entryType: "market", status: "triggered", triggeredAt: 1_000, effectiveEntry: 2300 }),
+      [{ time: 2_000, open: 2302, high: 2312, low: 2298, close: 2310 }],
+    );
+    expect(evaluation.status).toBe("tp1_hit");
+    expect(evaluation.outcome).toBe("pending");
+  });
+
   it("resolves a same-candle stop and target as a loss", () => {
     const evaluation = evaluateRecommendation(
       plan({ entryType: "market", status: "triggered", triggeredAt: 1_000, effectiveEntry: 2300 }),
@@ -135,7 +159,7 @@ describe("recommendations", () => {
   it("banks a target hit before a later stop", () => {
     const evaluation = evaluateRecommendation(
       plan({ entryType: "market", status: "triggered", triggeredAt: 1_000 }),
-      [candle(2_000, 2305, 2321, 2318), candle(3_000, 2280, 2310, 2285)],
+      [candle(2_000, 2305, 2315, 2312), candle(3_000, 2280, 2310, 2285)],
     );
     expect(evaluation.outcome).toBe("win_tp1");
   });
@@ -145,7 +169,7 @@ describe("recommendations", () => {
       plan({
         activationRule: { kind: "candle_close_above", level: 2300, timeframe: "1h" },
       }),
-      [{ time: 2_000, open: 2296, high: 2310, low: 2288, close: 2298 }],
+      [{ time: 2_000, open: 2296, high: 2305, low: 2288, close: 2298 }],
     );
     expect(evaluation.triggered).toBe(false);
     expect(evaluation.outcome).toBe("pending");
@@ -616,7 +640,7 @@ describe("delegation and migration", () => {
     expect(plans.find((item) => item.id === "boty-2")?.activationUnreadable).toBe(true);
     const service = new LonoraService(target);
     service.gradeRecommendations([
-      { time: Date.now() + 60_000, open: 2290, high: 2310, low: 2288, close: 2295 },
+      { time: Date.now() + 60_000, open: 2290, high: 2304, low: 2288, close: 2295 },
     ]);
     expect(target.listRecommendations().every((item) => item.outcome === "pending")).toBe(true);
     expect(
