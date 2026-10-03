@@ -365,6 +365,21 @@ function namedPatternLabel(kind: string) {
   if (kind === "inverse_head_and_shoulders") {
     return t("lonora.market.patternInverseHeadShoulders");
   }
+  if (kind === "ascending_triangle") {
+    return t("lonora.market.patternAscending");
+  }
+  if (kind === "descending_triangle") {
+    return t("lonora.market.patternDescending");
+  }
+  if (kind === "symmetrical_triangle") {
+    return t("lonora.market.patternSymmetrical");
+  }
+  if (kind === "rising_wedge") {
+    return t("lonora.market.patternRisingWedge");
+  }
+  if (kind === "falling_wedge") {
+    return t("lonora.market.patternFallingWedge");
+  }
   return "";
 }
 

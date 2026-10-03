@@ -172,6 +172,51 @@ describe("swing range stage", () => {
       inventedTarget: false,
     });
   });
+
+  it("names an ascending triangle only after a close beyond the flat ceiling", () => {
+    const candles = ascendingTriangle();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "ascending_triangle",
+      stage: "forming",
+      neckline: 112,
+      extreme: 106,
+      inventedTarget: false,
+    });
+    expect(forming.named).not.toHaveProperty("target");
+    expect(forming.named).not.toHaveProperty("projectedTarget");
+    expect(describePattern(forming, "en")).toContain("Ascending triangle");
+    expect(describePattern(forming, "ar")).toContain("مثلث صاعد");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 120, 107, 109)]);
+    expect(wicked.named?.kind).toBe("ascending_triangle");
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 116, 107, 114)]);
+    expect(completed.named).toMatchObject({
+      kind: "ascending_triangle",
+      stage: "completed_unconfirmed",
+      inventedTarget: false,
+    });
+    expect(completed.named).not.toHaveProperty("target");
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 116, 107, 114),
+      bar(candles.length + 1, 120, 110, 118),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+    expect(confirmed.named?.inventedTarget).toBe(false);
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 110, 96, 100)]);
+    expect(failed.named).toMatchObject({
+      kind: "ascending_triangle",
+      stage: "failed",
+      inventedTarget: false,
+    });
+  });
 });
 
 function headAndShoulders(): Candle[] {
@@ -195,6 +240,29 @@ function headAndShoulders(): Candle[] {
   peak(20, 116);
   trough(26);
   peak(32, 108);
+  return candles;
+}
+
+function ascendingTriangle(): Candle[] {
+  const candles = Array.from({ length: 46 }, (_, index) => bar(index, 109, 108.5, 108.7));
+  const peak = (index: number) => {
+    candles[index] = bar(index, 112, 108.5, 108.7);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 110, 108.5, 108.7);
+    }
+  };
+  const trough = (index: number, price: number) => {
+    candles[index] = bar(index, 109, price, 108.7);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 109, price + 2, 108.7);
+    }
+  };
+  peak(10);
+  trough(16, 100);
+  peak(22);
+  trough(28, 103);
+  peak(34);
+  trough(40, 106);
   return candles;
 }
 

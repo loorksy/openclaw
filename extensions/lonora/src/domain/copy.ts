@@ -79,6 +79,11 @@ const COPY = {
     "pattern.doubleBottom": "Double bottom",
     "pattern.headShoulders": "Head and shoulders",
     "pattern.inverseHeadShoulders": "Inverse head and shoulders",
+    "pattern.ascending": "Ascending triangle",
+    "pattern.descending": "Descending triangle",
+    "pattern.symmetrical": "Symmetrical triangle",
+    "pattern.risingWedge": "Rising wedge",
+    "pattern.fallingWedge": "Falling wedge",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -153,6 +158,11 @@ const COPY = {
     "pattern.doubleBottom": "قاع مزدوج",
     "pattern.headShoulders": "رأس وكتفان",
     "pattern.inverseHeadShoulders": "رأس وكتفان مقلوبان",
+    "pattern.ascending": "مثلث صاعد",
+    "pattern.descending": "مثلث هابط",
+    "pattern.symmetrical": "مثلث متماثل",
+    "pattern.risingWedge": "وتد صاعد",
+    "pattern.fallingWedge": "وتد هابط",
   },
 } as const;
 
