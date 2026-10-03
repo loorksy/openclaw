@@ -222,6 +222,53 @@ describe("swing range stage", () => {
     expect(failed.named?.inventedTarget).toBe(false);
   });
 
+  it("names support only while closes respect the line", () => {
+    const candles = risingSupport();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "support",
+      stage: "forming",
+      inventedTarget: false,
+    });
+    expect(forming.named?.neckline).toBeCloseTo(107.714, 2);
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Support");
+    expect(describePattern(forming, "ar")).toContain("دعم");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 112.4, 90, 112)]);
+    expect(wicked.named?.kind).toBe("support");
+
+    const broken = classifySwingRange([...candles, bar(candles.length, 92, 90, 91)]);
+    expect(broken.named).toBeNull();
+  });
+
+  it("names resistance from falling highs that closes stay under", () => {
+    const forming = classifySwingRange(fallingResistance());
+    expect(forming.named).toMatchObject({
+      kind: "resistance",
+      stage: "forming",
+      inventedTarget: false,
+    });
+    expect(forming.named?.neckline).toBeCloseTo(104.286, 2);
+    expect(describePattern(forming, "en")).toContain("Resistance");
+    expect(describePattern(forming, "ar")).toContain("مقاومة");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+  });
+
+  it("names a rising channel when the opposite swings share one offset", () => {
+    const forming = classifySwingRange(risingChannel());
+    expect(forming.named).toMatchObject({
+      kind: "rising_channel",
+      stage: "forming",
+      inventedTarget: false,
+    });
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Rising channel");
+    expect(describePattern(forming, "ar")).toContain("قناة صاعدة");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+  });
+
   it("names a head and shoulders only after a close through the neckline", () => {
     const candles = headAndShoulders();
     const forming = classifySwingRange(candles);
@@ -506,6 +553,47 @@ function ascendingTriangle(): Candle[] {
   trough(28, 103);
   peak(34);
   trough(40, 106);
+  return candles;
+}
+
+function risingSupport(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 112.4, 111.6, 112));
+  const low = (index: number, price: number) => {
+    candles[index] = bar(index, 112.4, price, 112);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 112.4, Math.min(price + 1.5, 111.2), 112);
+    }
+  };
+  low(8, 100);
+  low(22, 104);
+  return candles;
+}
+
+function fallingResistance(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 100.4, 99.6, 100));
+  const high = (index: number, price: number) => {
+    candles[index] = bar(index, price, 99.6, 100);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, Math.max(price - 1.5, 100.8), 99.6, 100);
+    }
+  };
+  high(8, 112);
+  high(22, 108);
+  return candles;
+}
+
+function risingChannel(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 106.8, 106.2, 106.6));
+  const low = (index: number, price: number) => {
+    candles[index] = bar(index, 106.8, price, 106.6);
+  };
+  const high = (index: number, price: number) => {
+    candles[index] = bar(index, price, 106.2, 106.6);
+  };
+  low(8, 100);
+  high(14, 107.333);
+  high(20, 108.667);
+  low(26, 104);
   return candles;
 }
 

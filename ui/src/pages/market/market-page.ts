@@ -477,6 +477,21 @@ function namedPatternLabel(kind: string) {
   if (kind === "rectangle") {
     return t("lonora.market.patternRectangle");
   }
+  if (kind === "support") {
+    return t("lonora.market.patternSupport");
+  }
+  if (kind === "resistance") {
+    return t("lonora.market.patternResistance");
+  }
+  if (kind === "rising_channel") {
+    return t("lonora.market.patternRisingChannel");
+  }
+  if (kind === "falling_channel") {
+    return t("lonora.market.patternFallingChannel");
+  }
+  if (kind === "horizontal_channel") {
+    return t("lonora.market.patternHorizontalChannel");
+  }
   return "";
 }
 

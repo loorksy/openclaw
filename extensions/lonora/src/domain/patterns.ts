@@ -59,7 +59,12 @@ export interface NamedExtreme {
     | "pennant"
     | "cup_and_handle"
     | "inverse_cup_and_handle"
-    | "rectangle";
+    | "rectangle"
+    | "support"
+    | "resistance"
+    | "rising_channel"
+    | "falling_channel"
+    | "horizontal_channel";
   stage: PatternStage;
   neckline: number;
   extreme: number;
@@ -106,6 +111,20 @@ const MAX_HANDLE_RETRACE = 0.5;
 const RECTANGLE_TOLERANCE_ATR = 0.35;
 const MIN_RECTANGLE_HEIGHT_ATR = 1.2;
 const MIN_RECTANGLE_SPAN = 12;
+const MIN_TREND_SEPARATION = 8;
+const MIN_TREND_SCORE = 60;
+const MIN_TREND_TOUCHES = 2;
+const TREND_TOUCH_ATR = 0.15;
+const MIN_TREND_TOUCH_GAP = 3;
+const TREND_ENVELOPE_ATR = 0.25;
+const MAX_TREND_ANCHOR_AGE = 100;
+const MAX_TREND_LINES = 2;
+const TREND_COLLINEAR_ATR = 0.5;
+const CHANNEL_TOUCH_ATR = 0.15;
+const MIN_CHANNEL_WIDTH_ATR = 1;
+const MAX_CHANNEL_WIDTH_ATR = 8;
+const MIN_CHANNEL_TOUCHES = 2;
+const HORIZONTAL_CHANNEL_SLOPE = 0.03;
 
 export function classifySwingRange(candles: Candle[]): SwingRangePattern {
   return {
@@ -117,7 +136,8 @@ export function classifySwingRange(candles: Candle[]): SwingRangePattern {
       classifyTripleExtreme(candles) ??
       classifyRectangle(candles) ??
       classifyDoubleExtreme(candles) ??
-      classifyFlag(candles),
+      classifyFlag(candles) ??
+      classifyTrendline(candles),
   };
 }
 
@@ -268,6 +288,16 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
       return copy(language, "pattern.inverseCup");
     case "rectangle":
       return copy(language, "pattern.rectangle");
+    case "support":
+      return copy(language, "pattern.support");
+    case "resistance":
+      return copy(language, "pattern.resistance");
+    case "rising_channel":
+      return copy(language, "pattern.risingChannel");
+    case "falling_channel":
+      return copy(language, "pattern.fallingChannel");
+    case "horizontal_channel":
+      return copy(language, "pattern.horizontalChannel");
   }
 }
 
@@ -1138,6 +1168,259 @@ function scanCup(
     };
   }
   return null;
+}
+
+function classifyTrendline(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const swings = swingsWithIndex(candles);
+  const support = acceptedTrendlines(candles, swings, atr, "low");
+  const resistance = acceptedTrendlines(candles, swings, atr, "high");
+  const channel = strongestChannel(candles, [...support, ...resistance], swings, atr);
+  if (channel) {
+    return channel;
+  }
+  const line = [...support, ...resistance].sort(compareTrendlines)[0];
+  if (!line) {
+    return null;
+  }
+  const last = candles.length - 1;
+  const price = linePrice(line.anchors[0], line.anchors[1], last);
+  return {
+    kind: line.side,
+    stage: "forming",
+    neckline: price,
+    extreme: price,
+    inventedTarget: false,
+  };
+}
+
+interface TrendAnchor {
+  index: number;
+  price: number;
+}
+
+interface TrendLine {
+  side: "support" | "resistance";
+  anchors: [TrendAnchor, TrendAnchor];
+  slope: number;
+  touches: number;
+  confidence: number;
+}
+
+function acceptedTrendlines(
+  candles: readonly Candle[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+  side: "low" | "high",
+): TrendLine[] {
+  const pivots = swings.filter((swing) => swing.type === side);
+  const candidates = pivots.flatMap((first, index) =>
+    pivots.slice(index + 1).flatMap((second) => {
+      const line = scoreTrendline(candles, pivots, first, second, side, atr);
+      return line ? [line] : [];
+    }),
+  );
+  candidates.sort(compareTrendlines);
+  const accepted: TrendLine[] = [];
+  for (const candidate of candidates) {
+    if (accepted.length >= MAX_TREND_LINES) {
+      break;
+    }
+    if (accepted.every((line) => distinctTrendline(candidate, line, atr))) {
+      accepted.push(candidate);
+    }
+  }
+  return accepted;
+}
+
+function scoreTrendline(
+  candles: readonly Candle[],
+  pivots: readonly (Swing & { index: number })[],
+  first: Swing & { index: number },
+  second: Swing & { index: number },
+  side: "low" | "high",
+  atr: number,
+): TrendLine | null {
+  const separation = second.index - first.index;
+  if (separation < MIN_TREND_SEPARATION) {
+    return null;
+  }
+  const lastIndex = candles.length - 1;
+  const anchorAge = lastIndex - second.index;
+  if (anchorAge > MAX_TREND_ANCHOR_AGE) {
+    return null;
+  }
+  const anchors: [TrendAnchor, TrendAnchor] = [
+    { index: first.index, price: first.price },
+    { index: second.index, price: second.price },
+  ];
+  if (closesThroughLine(candles, anchors, side, atr)) {
+    return null;
+  }
+  const touches = countLineTouches(pivots, anchors, atr);
+  if (touches < MIN_TREND_TOUCHES) {
+    return null;
+  }
+  let score = 40 + Math.min(30, touches * 10);
+  score += Math.min(15, Math.round((15 * separation) / Math.max(1, lastIndex)));
+  score += Math.max(0, 15 - Math.round((15 * anchorAge) / MAX_TREND_ANCHOR_AGE));
+  if (score < MIN_TREND_SCORE) {
+    return null;
+  }
+  return {
+    side: side === "low" ? "support" : "resistance",
+    anchors,
+    slope: (second.price - first.price) / Math.max(1, separation),
+    touches,
+    confidence: Math.max(0, Math.min(100, Math.round(score))),
+  };
+}
+
+function closesThroughLine(
+  candles: readonly Candle[],
+  anchors: readonly [TrendAnchor, TrendAnchor],
+  side: "low" | "high",
+  atr: number,
+): boolean {
+  const tolerance = Math.max(atr * TREND_ENVELOPE_ATR, Number.EPSILON);
+  for (let index = anchors[0].index; index < candles.length; index += 1) {
+    const expected = linePrice(anchors[0], anchors[1], index);
+    const close = candles[index]!.close;
+    if (side === "low" && close < expected - tolerance) {
+      return true;
+    }
+    if (side === "high" && close > expected + tolerance) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function countLineTouches(
+  pivots: readonly (Swing & { index: number })[],
+  anchors: readonly [TrendAnchor, TrendAnchor],
+  atr: number,
+): number {
+  const tolerance = Math.max(atr * TREND_TOUCH_ATR, Number.EPSILON);
+  let touches = 0;
+  let lastCounted = Number.NEGATIVE_INFINITY;
+  for (const pivot of pivots) {
+    if (pivot.index < anchors[0].index) {
+      continue;
+    }
+    const expected = linePrice(anchors[0], anchors[1], pivot.index);
+    if (Math.abs(pivot.price - expected) > tolerance) {
+      continue;
+    }
+    if (pivot.index - lastCounted < MIN_TREND_TOUCH_GAP) {
+      continue;
+    }
+    touches += 1;
+    lastCounted = pivot.index;
+  }
+  return touches;
+}
+
+function distinctTrendline(candidate: TrendLine, accepted: TrendLine, atr: number): boolean {
+  const tolerance = Math.max(atr * TREND_COLLINEAR_ATR, Number.EPSILON);
+  const [first, second] = accepted.anchors;
+  const deviation = Math.max(
+    ...candidate.anchors.map((anchor) =>
+      Math.abs(anchor.price - linePrice(first, second, anchor.index)),
+    ),
+  );
+  return deviation > tolerance;
+}
+
+function compareTrendlines(left: TrendLine, right: TrendLine): number {
+  return (
+    right.touches - left.touches ||
+    right.confidence - left.confidence ||
+    right.anchors[1].index - left.anchors[1].index ||
+    left.anchors[0].index - right.anchors[0].index
+  );
+}
+
+function strongestChannel(
+  candles: readonly Candle[],
+  lines: readonly TrendLine[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+): NamedExtreme | null {
+  let best: { named: NamedExtreme; confidence: number } | null = null;
+  for (const base of lines) {
+    const channel = channelFromLine(candles, base, swings, atr);
+    if (!channel) {
+      continue;
+    }
+    if (!best || channel.confidence > best.confidence) {
+      best = channel;
+    }
+  }
+  return best?.named ?? null;
+}
+
+function channelFromLine(
+  candles: readonly Candle[],
+  base: TrendLine,
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+): { named: NamedExtreme; confidence: number } | null {
+  const oppositeKind = base.side === "support" ? "high" : "low";
+  const [first, second] = base.anchors;
+  const opposite = swings.filter(
+    (swing) =>
+      swing.type === oppositeKind && swing.index >= first.index && swing.index <= second.index,
+  );
+  if (opposite.length < MIN_CHANNEL_TOUCHES) {
+    return null;
+  }
+  const offsets = opposite.map((swing) => swing.price - linePrice(first, second, swing.index));
+  const boundary = offsets.reduce((best, offset) =>
+    base.side === "support" ? Math.max(best, offset) : Math.min(best, offset),
+  );
+  const widthAtr = Math.abs(boundary) / atr;
+  if (widthAtr < MIN_CHANNEL_WIDTH_ATR || widthAtr > MAX_CHANNEL_WIDTH_ATR) {
+    return null;
+  }
+  const tolerance = Math.max(atr * CHANNEL_TOUCH_ATR, Number.EPSILON);
+  const touching = offsets.filter((offset) => Math.abs(offset - boundary) <= tolerance);
+  if (touching.length < MIN_CHANNEL_TOUCHES) {
+    return null;
+  }
+  const last = candles.length - 1;
+  const neckline = linePrice(first, second, last);
+  const slopeAtr = base.slope / atr;
+  const kind: NamedExtreme["kind"] =
+    Math.abs(slopeAtr) < HORIZONTAL_CHANNEL_SLOPE
+      ? "horizontal_channel"
+      : base.slope > 0
+        ? "rising_channel"
+        : "falling_channel";
+  return {
+    confidence: base.confidence * 0.6 + touching.length * 10 + Math.min(10, widthAtr * 2),
+    named: {
+      kind,
+      stage: "forming",
+      neckline,
+      extreme: neckline + boundary,
+      inventedTarget: false,
+    },
+  };
+}
+
+function linePrice(first: TrendAnchor, second: TrendAnchor, index: number): number {
+  if (second.index === first.index) {
+    return first.price;
+  }
+  const progress = (index - first.index) / (second.index - first.index);
+  return first.price + progress * (second.price - first.price);
 }
 
 function swingsWithIndex(candles: readonly Candle[]): (Swing & { index: number })[] {
