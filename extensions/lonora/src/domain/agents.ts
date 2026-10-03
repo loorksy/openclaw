@@ -6,13 +6,13 @@
 import {
   biasFromCandles,
   calculateAtr,
-  detectLiquidity,
   detectMajorLevels,
   detectSupplyDemandZones,
   detectSwings,
   detectTrend,
   type Candle,
 } from "./candles.js";
+import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import { detectStructureEvents, latestStructureEvent } from "./structure.js";
 
 export const SPECIALISTS = [
@@ -103,11 +103,14 @@ export function runLiquidityAnalyst(candles: Candle[]): SpecialistResult {
       failure: "insufficient_candles",
     };
   }
-  const liquidity = detectLiquidity(candles);
+  const liquidity = analyzeLiquidity(candles);
+  const latest = liquidity.latest;
   return {
     agent: "liquidity-analyst",
     ok: true,
-    summary: `Buy-side ${liquidity.nearestBuySide?.price ?? "none"}, sell-side ${liquidity.nearestSellSide?.price ?? "none"}`,
+    summary: latest
+      ? `${latest.side} sweep of ${latest.sweptLevel}, close back inside`
+      : `Buy-side ${liquidity.nearestBuySide?.price ?? "none"}, sell-side ${liquidity.nearestSellSide?.price ?? "none"}`,
     data: liquidity,
   };
 }

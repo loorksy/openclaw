@@ -87,6 +87,24 @@ describe("structure", () => {
     expect(result.summary).not.toBe("reviewed supplied evidence");
   });
 
+  it("reports a buy-side sweep from the closed candles", () => {
+    const candles = [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        time: index + 1,
+        open: 100,
+        high: 100.4,
+        low: 99.6,
+        close: 100,
+      })),
+      { time: 9, open: 100, high: 101.5, low: 99.9, close: 100 },
+      { time: 10, open: 100, high: 101.5, low: 99.85, close: 100 },
+      { time: 11, open: 100, high: 102.2, low: 99.95, close: 100.4 },
+    ];
+    const result = runSpecialist("liquidity-analyst", { candles });
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain("buy_side sweep of 101.5");
+  });
+
   it("fails closed when the sample is too short", () => {
     const result = runSpecialist("liquidity-analyst", { candles: risingCandles(2) });
     expect(result.ok).toBe(false);
@@ -197,6 +215,13 @@ describe("monitor", () => {
     expect(decision.reasons).toContain("structure_change");
   });
 
+  it("treats a new sweep as material specialist work", () => {
+    const decision = decideMonitorAction(base, { ...base, sweepKey: "buy_side:11:101.5" });
+    expect(decision.material).toBe(true);
+    expect(decision.deepAnalysis).toBe(true);
+    expect(decision.reasons).toContain("liquidity_sweep");
+  });
+
   it("does not invent movement while closed", () => {
     const decision = decideMonitorAction(base, {
       ...base,
@@ -206,6 +231,7 @@ describe("monitor", () => {
     });
     expect(decision.deepAnalysis).toBe(false);
     expect(decision.reasons).not.toContain("price_move");
+    expect(decision.reasons).not.toContain("liquidity_sweep");
   });
 
   it("suppresses a delivered notice until cooldown ends", () => {
@@ -382,6 +408,14 @@ describe("responsibilities, memory, usage", () => {
     expect(
       checkResponsibility("Tell me if structure changes.", { reasons: ["new_candle"] }, false),
     ).toEqual({ matched: [], waiting: true, closed: true });
+    expect(
+      checkResponsibility("Watch this liquidity zone.", { reasons: ["liquidity_sweep"] }, true)
+        .matched,
+    ).toEqual(["liquidity_sweep"]);
+    expect(
+      checkResponsibility("Watch this liquidity zone.", { reasons: ["volatility_change"] }, true)
+        .waiting,
+    ).toBe(true);
   });
 
   it("attributes estimated cost by provider and feature", () => {

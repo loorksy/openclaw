@@ -9,6 +9,7 @@ import {
 } from "./domain/agents.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
+import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
 import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
 import {
@@ -187,9 +188,11 @@ export class LonoraService {
       now,
       GOLD_BAR_MS,
     );
+    const liquidity = analyzeLiquidity(visible.candles);
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
+      latestSweep: liquidity.latest,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",
@@ -221,6 +224,7 @@ export class LonoraService {
     let candleTime = previous?.candleTime ?? null;
     let atr = previous?.atr ?? null;
     let structureEventKey = previous?.structureEventKey ?? null;
+    let sweep = previous?.sweepKey ?? null;
     let candles: Candle[] = [];
     if (!clock.isOpen) {
       this.lastDataStatus = "closed";
@@ -244,6 +248,7 @@ export class LonoraService {
           latest?.type && latest.breakCandleTime
             ? `${latest.type}:${latest.breakCandleTime}`
             : "none";
+        sweep = sweepKey(analyzeLiquidity(candles).latest);
         this.gradeRecommendations(candles);
       }
     }
@@ -254,6 +259,7 @@ export class LonoraService {
       marketOpen: clock.isOpen,
       atr,
       structureEventKey,
+      sweepKey: sweep,
       recommendationFingerprint: this.store
         .listRecommendations()
         .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
@@ -261,7 +267,12 @@ export class LonoraService {
     });
     await this.publishNotices(observed.decision, now);
     if (observed.decision.deepAnalysis && candles.length > 0 && this.withinBudget(now)) {
-      const result = this.delegate({ agent: "structure-analyst", candles });
+      const agent =
+        observed.decision.reasons.includes("liquidity_sweep") &&
+        !observed.decision.reasons.includes("structure_change")
+          ? "liquidity-analyst"
+          : "structure-analyst";
+      const result = this.delegate({ agent, candles });
       this.lastAssessment = "summary" in result ? result.summary : null;
     }
     const language = this.store.getOwner()?.language ?? "en";

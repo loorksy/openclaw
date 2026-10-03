@@ -10,6 +10,8 @@ export interface Observation {
   marketOpen: boolean;
   atr: number | null;
   structureEventKey: string | null;
+  /** Latest closed-candle sweep. Absent on observations stored before sweeps. */
+  sweepKey?: string | null;
   recommendationFingerprint: string;
 }
 
@@ -69,6 +71,10 @@ export function decideMonitorAction(
   if (next.structureEventKey && next.structureEventKey !== previous.structureEventKey) {
     reasons.push("structure_change");
   }
+  const nextSweep = next.sweepKey ?? null;
+  if (nextSweep && nextSweep !== "none" && nextSweep !== (previous.sweepKey ?? null)) {
+    reasons.push("liquidity_sweep");
+  }
   if (next.recommendationFingerprint !== previous.recommendationFingerprint) {
     reasons.push("recommendation_change");
   }
@@ -79,10 +85,13 @@ export function decideMonitorAction(
       "volatility_change",
       "structure_change",
       "recommendation_change",
+      "liquidity_sweep",
     ].includes(reason),
   );
   const deepAnalysis = reasons.some((reason) =>
-    ["structure_change", "recommendation_change", "volatility_change"].includes(reason),
+    ["structure_change", "recommendation_change", "volatility_change", "liquidity_sweep"].includes(
+      reason,
+    ),
   );
   return {
     material: meaningful,

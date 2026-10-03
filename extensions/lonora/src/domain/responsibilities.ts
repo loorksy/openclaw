@@ -6,7 +6,7 @@ import type { MonitorDecision } from "./monitor.js";
 
 const TOPIC_RULES: { pattern: RegExp; reasons: string[] }[] = [
   { pattern: /structure|bos|choch|swing|هيكل/i, reasons: ["structure_change"] },
-  { pattern: /liquid|سيولة/i, reasons: ["volatility_change"] },
+  { pattern: /liquid|sweep|سيولة/i, reasons: ["liquidity_sweep"] },
   { pattern: /recommend|توصية/i, reasons: ["recommendation_change"] },
   {
     pattern: /session|new york|london|جلسة|نيويورك|لندن/i,

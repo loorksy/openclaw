@@ -30,6 +30,8 @@ class MarketPage extends OpenClawLightDomElement {
 
   @state() private snapshot: MarketSnapshot | null = null;
   @state() private candles: ChartCandle[] = [];
+  @state() private latestSweep: { side: "buy_side" | "sell_side"; sweptLevel: number } | null =
+    null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private loading = false;
@@ -63,6 +65,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.error = t("lonora.market.disconnected");
       this.snapshot = null;
       this.candles = [];
+      this.latestSweep = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -97,6 +100,7 @@ class MarketPage extends OpenClawLightDomElement {
     const target = lonoraRequestTarget(this.context, "lonora.candles.read");
     if (!target.ok) {
       this.candles = [];
+      this.latestSweep = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -104,6 +108,7 @@ class MarketPage extends OpenClawLightDomElement {
       const read = await target.client.request<{
         ok: boolean;
         candles: ChartCandle[];
+        latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -111,12 +116,14 @@ class MarketPage extends OpenClawLightDomElement {
         return;
       }
       this.candles = read.invented ? [] : read.candles;
+      this.latestSweep = read.invented ? null : (read.latestSweep ?? null);
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
         return;
       }
       this.candles = [];
+      this.latestSweep = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -161,6 +168,8 @@ class MarketPage extends OpenClawLightDomElement {
                 </dl>
                 <h2>${t("lonora.market.chart")}</h2>
                 ${renderChart(this.candles, this.chartError)}
+                <h2>${t("lonora.market.sweep")}</h2>
+                <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.activeRecommendations")}</h2>
                 ${
                   snapshot.recommendations.length
@@ -187,6 +196,22 @@ class MarketPage extends OpenClawLightDomElement {
       </section>
     `;
   }
+}
+
+function sweepText(
+  sweep: { side: "buy_side" | "sell_side"; sweptLevel: number } | null,
+  error: string | null,
+  candleCount: number,
+) {
+  if (sweep) {
+    const side =
+      sweep.side === "buy_side" ? t("lonora.market.sweepBuy") : t("lonora.market.sweepSell");
+    return `${side} ${sweep.sweptLevel}`;
+  }
+  if (error && candleCount === 0) {
+    return t("lonora.market.chartUnavailable");
+  }
+  return t("lonora.market.sweepNone");
 }
 
 function renderChart(candles: ChartCandle[], error: string | null) {
