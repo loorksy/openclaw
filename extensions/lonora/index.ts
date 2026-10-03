@@ -252,7 +252,7 @@ export default definePluginEntry({
     );
     tool(
       "lonora_memory",
-      "Read or write Lonora memory. Kinds stay separate: preference, lesson, research, recommendation, market_observation.",
+      "Read or write Lonora memory. Kinds stay separate: preference, lesson, research, scenario, recommendation, market_observation.",
       Type.Object({
         action: Type.Union([Type.Literal("read"), Type.Literal("write")]),
         kind: Type.Optional(Text),

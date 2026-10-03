@@ -442,6 +442,36 @@ describe("responsibilities, memory, usage", () => {
     ).toBe(true);
   });
 
+  it("replaces one gold scenario and withholds a rate below five outcomes", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const outcomes = ["win_tp1", "win_tp1", "win_tp1", "loss"] as const;
+    for (const [index, outcome] of outcomes.entries()) {
+      service.saveRecommendation(
+        plan({
+          id: `rec-${index}`,
+          outcome,
+          status: outcome === "loss" ? "sl_hit" : "tp1_hit",
+          effectiveEntry: 2300,
+        }),
+      );
+    }
+    expect(service.refreshScenarioMemory().winRate).toBeNull();
+    expect(store.searchMemory("realized", "scenario")).toEqual([]);
+    service.saveRecommendation(
+      plan({ id: "rec-4", outcome: "loss", status: "sl_hit", effectiveEntry: 2300 }),
+    );
+    const ready = service.refreshScenarioMemory();
+    expect(ready.winRate).toBe(60);
+    expect(store.searchMemory("Win rate", "scenario")).toHaveLength(1);
+    service.refreshScenarioMemory();
+    expect(store.searchMemory("Win rate", "scenario")).toHaveLength(1);
+    const research = service.delegate({ agent: "research-agent" });
+    expect(research.ok).toBe(true);
+    expect(research.summary).toMatch(/Win rate 60%/);
+    store.close();
+  });
+
   it("attributes estimated cost by provider and feature", () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);

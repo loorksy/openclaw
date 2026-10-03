@@ -12,7 +12,8 @@ export type MemoryKind =
   | "recommendation"
   | "historical_case"
   | "lesson"
-  | "research";
+  | "research"
+  | "scenario";
 
 export interface MemoryRow {
   id: string;
@@ -267,6 +268,25 @@ export class LonoraStore {
       )
       .run(row.id, row.kind, row.content, row.symbol, row.createdAt);
     return row;
+  }
+
+  /** One live block per kind and symbol. A null content removes the previous block. */
+  replaceMemory(kind: MemoryKind, symbol: string, content: string | null): MemoryRow | null {
+    this.db.exec("SAVEPOINT lonora_replace_memory");
+    try {
+      this.db.prepare("DELETE FROM memories WHERE kind = ? AND symbol = ?").run(kind, symbol);
+      if (!content) {
+        this.db.exec("RELEASE lonora_replace_memory");
+        return null;
+      }
+      const row = this.addMemory({ kind, content, symbol });
+      this.db.exec("RELEASE lonora_replace_memory");
+      return row;
+    } catch (error) {
+      this.db.exec("ROLLBACK TO lonora_replace_memory");
+      this.db.exec("RELEASE lonora_replace_memory");
+      throw error;
+    }
   }
 
   searchMemory(query: string, kind?: MemoryKind): MemoryRow[] {

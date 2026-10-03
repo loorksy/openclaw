@@ -224,20 +224,26 @@ export function runSpecialist(
         data: { note: input.note ?? null },
         failure: input.note?.trim() ? undefined : "no_macro_context",
       };
-    case "research-agent":
+    case "research-agent": {
+      const scenario = input.note?.trim() ?? "";
+      const bars = input.candles?.length ?? 0;
+      if (!scenario && bars < 10) {
+        return {
+          agent: id,
+          ok: false,
+          summary: "Research needs a realized gold record or a closed-candle sample.",
+          data: { bars },
+          failure: "insufficient_history",
+        };
+      }
+      const bias = bars >= 10 ? biasFromCandles(input.candles!) : null;
       return {
         agent: id,
-        ok: (input.candles?.length ?? 0) >= 10,
-        summary:
-          (input.candles?.length ?? 0) >= 10
-            ? `Compared ${input.candles!.length} closed bars. Bias ${biasFromCandles(input.candles!)}.`
-            : "Research needs a closed-candle sample. None was supplied.",
-        data: {
-          bars: input.candles?.length ?? 0,
-          bias: input.candles ? biasFromCandles(input.candles) : "unknown",
-        },
-        failure: (input.candles?.length ?? 0) >= 10 ? undefined : "insufficient_history",
+        ok: true,
+        summary: [scenario, bias ? `Closed-candle bias ${bias}.` : ""].filter(Boolean).join(" "),
+        data: { scenario: scenario || null, bars, bias: bias ?? "unknown" },
       };
+    }
     case "memory-curator":
       return {
         agent: id,

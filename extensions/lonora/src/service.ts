@@ -23,6 +23,7 @@ import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility } from "./domain/responsibilities.js";
+import { summarizeScenario } from "./domain/scenario.js";
 import {
   classifyFeature,
   dailyBudgetAllows,
@@ -371,7 +372,15 @@ export class LonoraService {
       this.store.saveRecommendation(next);
       updated.push(next);
     }
+    this.refreshScenarioMemory();
     return updated;
+  }
+
+  refreshScenarioMemory() {
+    const owner = this.store.ensureLocalOwner();
+    const summary = summarizeScenario(this.store.listRecommendations(), owner.language);
+    this.store.replaceMemory("scenario", "XAUUSD", summary.writable ? summary.text : null);
+    return summary;
   }
 
   notifyOwner(_key: string, _message: string): never {
@@ -451,7 +460,8 @@ export class LonoraService {
       });
       return { ok: false as const, agent: input.agent, summary, failure: "delegation_limit" };
     }
-    const result = runSpecialist(input.agent, input);
+    const note = input.agent === "research-agent" ? this.refreshScenarioMemory().text : input.note;
+    const result = runSpecialist(input.agent, { ...input, note });
     this.store.recordAgentRun({
       agent: input.agent,
       parentRunId: input.parentRunId,
