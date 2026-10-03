@@ -40,6 +40,7 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private pattern: SwingRangeView | null = null;
   @state() private candleShape: CandleShapeView | null = null;
   @state() private dealingRange: DealingRangeView | null = null;
+  @state() private priorDay: PriorDayView | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -81,6 +82,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
+      this.priorDay = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -212,6 +214,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
+      this.priorDay = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -223,6 +226,7 @@ class MarketPage extends OpenClawLightDomElement {
         pattern?: SwingRangeView | null;
         candleShape?: CandleShapeView | null;
         range?: DealingRangeView | null;
+        priorDay?: PriorDayView | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -238,6 +242,7 @@ class MarketPage extends OpenClawLightDomElement {
           ? null
           : (read.candleShape ?? null);
       this.dealingRange = read.invented || read.range?.invented !== false ? null : read.range;
+      this.priorDay = read.invented || read.priorDay?.invented !== false ? null : read.priorDay;
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -248,6 +253,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
+      this.priorDay = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -314,6 +320,8 @@ class MarketPage extends OpenClawLightDomElement {
                 <p role="status">${this.historyText ?? t("lonora.market.historyEmpty")}</p>
                 <h2>${t("lonora.market.chart")}</h2>
                 ${renderChart(this.candles, this.chartError)}
+                <h2>${t("lonora.market.priorDay")}</h2>
+                <p>${priorDayText(this.priorDay, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.range")}</h2>
                 <p>${rangeText(this.dealingRange, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.sweep")}</h2>
@@ -350,6 +358,12 @@ class MarketPage extends OpenClawLightDomElement {
   }
 }
 
+type PriorDayView = {
+  high: number;
+  low: number;
+  invented: false;
+};
+
 type DealingRangeView = {
   high: number;
   low: number;
@@ -369,6 +383,16 @@ type SwingRangeView = {
   inventedTarget: false;
   named?: { kind: string; inventedTarget: false } | null;
 };
+
+function priorDayText(day: PriorDayView | null, error: string | null, candleCount: number) {
+  if (!day || day.invented !== false) {
+    if (error && candleCount === 0) {
+      return t("lonora.market.chartUnavailable");
+    }
+    return t("lonora.market.priorDayUnknown");
+  }
+  return `${day.low}–${day.high}`;
+}
 
 function rangeText(range: DealingRangeView | null, error: string | null, candleCount: number) {
   if (!range || range.invented !== false) {

@@ -26,6 +26,7 @@ import {
   tradeSpanFor,
 } from "./geometry.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
+import { priorGoldDay } from "./market.js";
 import type { OwnerLanguage } from "./owner.js";
 import { computeRangePosition, describeRange, positionDisfavorsEntry } from "./range-position.js";
 import type { RecommendationPlan } from "./recommendations.js";
@@ -164,7 +165,7 @@ function selectZone(
     zone.type === "demand" ? price >= zone.low : price <= zone.high,
   );
   const swings = detectSwings(candles);
-  const levels = detectMajorLevels(candles);
+  const levels = detectMajorLevels(candles, priorDayCandles(candles));
   const context = {
     candles,
     currentPrice: price,
@@ -294,8 +295,24 @@ export function describePlanQuality(input: {
   return `${spreadLine} ${higherLine}`;
 }
 
+function priorDayCandles(candles: readonly Candle[]): Candle[] {
+  const prior = priorGoldDay(candles);
+  if (!prior) {
+    return [];
+  }
+  return [
+    {
+      time: prior.highTime,
+      open: prior.low,
+      high: prior.high,
+      low: prior.low,
+      close: prior.low,
+    },
+  ];
+}
+
 function structuralLevels(candles: Candle[]): number[] {
-  const levels = detectMajorLevels(candles);
+  const levels = detectMajorLevels(candles, priorDayCandles(candles));
   return [
     ...detectSwings(candles).map((swing) => swing.price),
     ...levels.support.map((level) => level.price),

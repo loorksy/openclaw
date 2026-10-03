@@ -35,6 +35,8 @@ const enLonora = {
       chart: "Closed candles",
       chartEmpty: "No closed candles to draw.",
       chartUnavailable: "The candle feed is unavailable.",
+      priorDay: "Prior gold day",
+      priorDayUnknown: "The prior gold day has not been read yet.",
       range: "Dealing range",
       rangeUnknown: "The dealing range has not been read yet.",
       rangePremium: "Premium",

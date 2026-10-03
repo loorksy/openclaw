@@ -17,6 +17,7 @@ import { describeCandleShape, latestCandleShape } from "./candlesticks.js";
 import { copy } from "./copy.js";
 import { describeHeadlines, type NewsHeadline } from "./headlines.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
+import { priorGoldDay } from "./market.js";
 import type { OwnerLanguage } from "./owner.js";
 import { classifySwingRange, describePattern } from "./patterns.js";
 import { computeRangePosition, describeRange } from "./range-position.js";
@@ -89,19 +90,34 @@ export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
   const atr = calculateAtr(candles);
   const events = detectStructureEvents(candles, swings, atr);
   const latest = latestStructureEvent(events);
-  const levels = detectMajorLevels(candles);
+  const priorDay = priorGoldDay(candles);
+  const levels = detectMajorLevels(
+    candles,
+    priorDay
+      ? [
+          {
+            time: priorDay.highTime,
+            open: priorDay.low,
+            high: priorDay.high,
+            low: priorDay.low,
+            close: priorDay.low,
+          },
+        ]
+      : [],
+  );
   const pattern = classifySwingRange(candles);
   const patternText = describePattern(pattern, "en");
   const candleShape = latestCandleShape(candles);
   const candleText = candleShape ? ` ${describeCandleShape(candleShape, "en")}` : "";
   const range = computeRangePosition(candles, candles.at(-1)?.close ?? null);
   const rangeText = range ? ` ${describeRange("en", range)}.` : "";
+  const priorText = priorDay ? ` Prior gold day ${priorDay.low}–${priorDay.high}.` : "";
   return {
     agent: "structure-analyst",
     ok: true,
     summary: latest
-      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}${candleText}${rangeText}`
-      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}${candleText}${rangeText}`,
+      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}${candleText}${rangeText}${priorText}`
+      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}${candleText}${rangeText}${priorText}`,
     data: { trend, swings, events, latest, levels, atr, pattern, candleShape },
   };
 }

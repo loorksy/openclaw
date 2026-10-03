@@ -28,7 +28,7 @@ import {
 } from "./domain/headlines.js";
 import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
-import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
+import { candlesVisibleAt, priorGoldDay, readMarketClock } from "./domain/market.js";
 import {
   decideMonitorAction,
   nextNotice,
@@ -256,6 +256,7 @@ export class LonoraService {
         pattern: null,
         candleShape: null,
         range: null,
+        priorDay: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -277,6 +278,7 @@ export class LonoraService {
         visible.candles.length > 0
           ? computeRangePosition(visible.candles, visible.candles.at(-1)?.close ?? null)
           : null,
+      priorDay: visible.candles.length > 0 ? priorGoldDay(visible.candles) : null,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",
