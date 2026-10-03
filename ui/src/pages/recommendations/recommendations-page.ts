@@ -15,12 +15,15 @@ type Recommendation = {
   id: string;
   symbol: string;
   direction: string;
+  directionLabel?: string;
   entry: number;
   stop?: number;
   stopLoss?: number;
   targets?: number[];
   status: string;
+  statusLabel?: string;
   outcome: string;
+  outcomeLabel?: string;
   rationale?: string;
   activationSummary?: string | null;
 };
@@ -205,8 +208,8 @@ class RecommendationsPage extends OpenClawLightDomElement {
                   const targets = Array.isArray(plan.targets) ? plan.targets : [];
                   return html`
                     <li>
-                      <strong>${plan.symbol} ${plan.direction}</strong>
-                      · ${plan.status} · ${plan.outcome}
+                      <strong>${plan.symbol} ${plan.directionLabel || plan.direction}</strong>
+                      · ${plan.statusLabel || plan.status} · ${plan.outcomeLabel || plan.outcome}
                       <div>
                         ${t("lonora.recommendations.entry")} ${plan.entry} ·
                         ${t("lonora.recommendations.stop")} ${stop ?? t("common.na")} ·

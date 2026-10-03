@@ -297,6 +297,38 @@ describe("structure", () => {
     store.close();
   });
 
+  it("names a recommendation in the owner language", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    service.saveRecommendation(plan());
+    const english = service.listRecommendations()[0];
+    expect(english?.direction).toBe("buy");
+    expect(english?.status).toBe("pending_entry");
+    expect(english?.outcome).toBe("pending");
+    expect(english?.directionLabel).toBe("Buy");
+    expect(english?.statusLabel).toBe("Waiting for entry");
+    expect(english?.outcomeLabel).toBe("Open");
+    store.setLanguage("ar");
+    const arabic = service.listRecommendations()[0];
+    expect(arabic?.directionLabel).toBe("شراء");
+    expect(arabic?.statusLabel).toBe("بانتظار الدخول");
+    expect(arabic?.outcomeLabel).toBe("مفتوحة");
+    expect(`${arabic?.directionLabel} ${arabic?.statusLabel}`).not.toContain("buy");
+    service.saveRecommendation(plan({ id: "rec-loss", status: "sl_hit", outcome: "loss" }));
+    const loss = service.listRecommendations().find((item) => item.id === "rec-loss");
+    expect(loss?.statusLabel).toBe("بلغ الوقف");
+    expect(loss?.outcomeLabel).toBe("خسارة");
+    expect(loss?.outcome).toBe("loss");
+    expect(loss?.outcomeLabel).not.toContain("ربح");
+    const open = service.marketSnapshot().recommendations.find((item) => item.id === "rec-1");
+    expect(open?.directionLabel).toBe("شراء");
+    expect(open?.statusLabel).toBe("بانتظار الدخول");
+    expect(
+      service.marketSnapshot().recommendations.find((item) => item.id === "rec-loss"),
+    ).toBeUndefined();
+    store.close();
+  });
+
   it("reports a buy-side sweep from the closed candles", () => {
     const candles = [
       ...Array.from({ length: 8 }, (_, index) => ({

@@ -21,7 +21,13 @@ type MarketSnapshot = {
   invented: false;
   clock: { isOpen: boolean; session: string; reason: string };
   centers?: string;
-  recommendations: { id: string; direction: string; status: string }[];
+  recommendations: {
+    id: string;
+    direction: string;
+    directionLabel?: string;
+    status: string;
+    statusLabel?: string;
+  }[];
   responsibilities: { id: string; title: string; status: string }[];
   dataStatus?: string;
   dataError?: string | null;
@@ -377,7 +383,11 @@ class MarketPage extends OpenClawLightDomElement {
                   snapshot.recommendations.length
                     ? html`<ul>
                         ${snapshot.recommendations.map(
-                          (plan) => html`<li>${plan.id}: ${plan.direction} · ${plan.status}</li>`,
+                          (plan) =>
+                            html`<li>
+                              ${plan.id}: ${plan.directionLabel || plan.direction} ·
+                              ${plan.statusLabel || plan.status}
+                            </li>`,
                         )}
                       </ul>`
                     : html`<p>${t("lonora.market.noRecommendations")}</p>`

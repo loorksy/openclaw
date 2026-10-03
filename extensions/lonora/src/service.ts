@@ -28,7 +28,7 @@ import {
 import { describeCandleShape, latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { latestOwnerText } from "./domain/conversation.js";
-import { copy, describeNotice, marketReasonCopy } from "./domain/copy.js";
+import { copy, describeNotice, marketReasonCopy, type CopyKey } from "./domain/copy.js";
 import { tradableRetestBand } from "./domain/fill.js";
 import {
   describeHeadlines,
@@ -57,7 +57,12 @@ import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/p
 import { describeNearestZones, nearestGoldZones, prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { computeRangePosition, describeRange } from "./domain/range-position.js";
-import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
+import {
+  evaluateRecommendation,
+  type RecommendationOutcome,
+  type RecommendationPlan,
+  type RecommendationStatus,
+} from "./domain/recommendations.js";
 import { checkResponsibility, responsibilityEventText } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
 import {
@@ -143,7 +148,8 @@ export class LonoraService {
       headlines: this.lastHeadlines,
       recommendations: this.store
         .listRecommendations()
-        .filter((plan) => plan.outcome === "pending"),
+        .filter((plan) => plan.outcome === "pending")
+        .map((plan) => ({ ...plan, ...recommendationLabels(plan, owner.language) })),
       responsibilities: this.store.listResponsibilities().filter((row) => row.status === "running"),
     };
   }
@@ -477,6 +483,7 @@ export class LonoraService {
     return this.store.listRecommendations().map((plan) => ({
       ...plan,
       activationSummary: activationSummary(plan, language),
+      ...recommendationLabels(plan, language),
     }));
   }
 
@@ -1175,6 +1182,42 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
   }
   const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
   return ruleText ? `${ruleText} ${bandText}` : bandText;
+}
+
+function recommendationLabels(
+  plan: {
+    direction: RecommendationPlan["direction"];
+    status: RecommendationStatus;
+    outcome: RecommendationOutcome;
+  },
+  language: OwnerLanguage,
+): { directionLabel: string; statusLabel: string; outcomeLabel: string } {
+  const statusKey: Record<RecommendationStatus, CopyKey> = {
+    pending_entry: "label.status.pending_entry",
+    triggered: "label.status.triggered",
+    tp1_hit: "label.status.tp1_hit",
+    tp2_hit: "label.status.tp2_hit",
+    tp3_hit: "label.status.tp3_hit",
+    sl_hit: "label.status.sl_hit",
+    invalidated: "label.status.invalidated",
+    expired: "label.status.expired",
+    cancelled: "label.status.cancelled",
+  };
+  const outcomeKey: Record<RecommendationOutcome, CopyKey> = {
+    pending: "label.outcome.pending",
+    win_tp1: "label.outcome.win_tp1",
+    win_tp2: "label.outcome.win_tp2",
+    win_tp3: "label.outcome.win_tp3",
+    loss: "label.outcome.loss",
+    expired: "label.outcome.expired",
+    cancelled: "label.outcome.cancelled",
+    invalidated: "label.outcome.invalidated",
+  };
+  return {
+    directionLabel: copy(language, plan.direction === "sell" ? "label.sell" : "label.buy"),
+    statusLabel: copy(language, statusKey[plan.status]),
+    outcomeLabel: copy(language, outcomeKey[plan.outcome]),
+  };
 }
 
 function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
