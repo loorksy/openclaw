@@ -14,6 +14,7 @@ import {
 } from "./candles.js";
 import { describeCandleShape, latestCandleShape } from "./candlesticks.js";
 import { copy } from "./copy.js";
+import { computeNetR } from "./geometry.js";
 import { describeHeadlines, type NewsHeadline } from "./headlines.js";
 import { describeRestingLiquidity, restingLiquidity } from "./liquidity-sweeps.js";
 import { priorGoldDay } from "./market.js";
@@ -234,24 +235,36 @@ export function runRiskReviewer(input: {
   entry: number;
   stopLoss: number;
   targets: number[];
+  spread?: number | null;
+  language?: OwnerLanguage;
 }): SpecialistResult {
+  const language = input.language ?? "en";
+  const target = input.targets.find((level) => Number.isFinite(level));
   const risk = Math.abs(input.entry - input.stopLoss);
-  if (!(risk > 0) || input.targets.length === 0) {
+  if (!(risk > 0) || target == null) {
     return {
       agent: "risk-reviewer",
       ok: false,
-      summary: "A plan needs a stop and at least one target before it can be graded.",
-      data: {},
+      summary: copy(language, "risk.incomplete"),
+      data: { spreadKnown: false },
       failure: "incomplete_plan",
     };
   }
-  const reward = Math.abs(input.targets[0]! - input.entry);
-  const rr = reward / risk;
+  const net = computeNetR({
+    entry: input.entry,
+    stop: input.stopLoss,
+    target,
+    spread: input.spread,
+  });
+  const figure = `${net.netR.toFixed(2)}R`;
+  const summary = net.spreadKnown
+    ? `${copy(language, "plan.spreadNet")} ${figure}.`
+    : `${copy(language, "risk.gross")} ${figure}. ${copy(language, "plan.spreadUnread")}`;
   return {
     agent: "risk-reviewer",
     ok: true,
-    summary: `First target pays ${rr.toFixed(2)}R`,
-    data: { risk, reward, rr, acceptable: rr >= 1 },
+    summary,
+    data: { rr: net.netR, spreadKnown: net.spreadKnown },
   };
 }
 
@@ -318,6 +331,7 @@ export function runSpecialist(
         entry: input.entry ?? Number.NaN,
         stopLoss: input.stopLoss ?? Number.NaN,
         targets: input.targets ?? [],
+        language: input.language ?? "en",
       });
     case "macro-news-analyst": {
       const language = input.language ?? "en";

@@ -917,8 +917,31 @@ export class LonoraService {
         ? [scenario, input.note].filter((part) => part && part.trim().length > 0).join(" ")
         : input.note;
     const language = this.store.ensureLocalOwner().language;
-    const result = runSpecialist(input.agent, {
-      ...input,
+    const pending =
+      input.agent === "risk-reviewer"
+        ? this.store
+            .listRecommendations()
+            .filter(
+              (plan) =>
+                plan.symbol === "XAUUSD" &&
+                plan.outcome === "pending" &&
+                Number.isFinite(plan.entry) &&
+                Number.isFinite(plan.stopLoss) &&
+                plan.targets.some((level) => Number.isFinite(level)),
+            )
+            .sort((left, right) => right.createdAt - left.createdAt)[0]
+        : undefined;
+    const reviewed =
+      input.agent === "risk-reviewer"
+        ? {
+            ...input,
+            entry: pending?.entry,
+            stopLoss: pending?.stopLoss,
+            targets: pending?.targets ?? [],
+          }
+        : input;
+    const result = runSpecialist(reviewed.agent, {
+      ...reviewed,
       note,
       language,
       guardian:

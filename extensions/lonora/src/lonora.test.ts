@@ -218,6 +218,43 @@ describe("structure", () => {
     expect(arabic.summary).not.toContain("Uptrend");
   });
 
+  it("grades the stored gold plan and ignores a caller-supplied entry", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const missing = service.delegate({
+      agent: "risk-reviewer",
+      entry: 100,
+      stopLoss: 90,
+      targets: [130],
+    });
+    expect(missing.ok).toBe(false);
+    expect(missing.summary).toBe("No open gold plan has a stop and a first target.");
+    expect(missing.summary).not.toMatch(/\dR/);
+    service.saveRecommendation(plan());
+    const graded = service.delegate({
+      agent: "risk-reviewer",
+      entry: 100,
+      stopLoss: 90,
+      targets: [130],
+    });
+    expect(graded.ok).toBe(true);
+    expect(graded.summary).toContain("First target is 2.00R.");
+    expect(graded.summary).toContain("The spread was not read");
+    expect(graded.summary).not.toContain("100");
+    expect(graded.data.spreadKnown).toBe(false);
+    store.setLanguage("ar");
+    const arabic = service.delegate({
+      agent: "risk-reviewer",
+      entry: 1,
+      stopLoss: 2,
+      targets: [3],
+    });
+    expect(arabic.summary).toContain("الهدف الأول 2.00R.");
+    expect(arabic.summary).toContain("السبريد لم يُقرأ");
+    expect(arabic.summary).not.toContain("First target");
+    store.close();
+  });
+
   it("reports a buy-side sweep from the closed candles", () => {
     const candles = [
       ...Array.from({ length: 8 }, (_, index) => ({
