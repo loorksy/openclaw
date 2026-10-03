@@ -20,6 +20,7 @@ import { bindTelegram } from "./domain/owner.js";
 import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
+import { checkResponsibility } from "./domain/responsibilities.js";
 import {
   classifyFeature,
   dailyBudgetAllows,
@@ -36,6 +37,15 @@ export class LonoraService {
   private lastAssessment: string | null = null;
   private lastDataError: string | null = null;
   private activeMonitor: Promise<unknown> | null = null;
+  private deliverNotice:
+    | ((input: { chatId: string; text: string; key: string }) => Promise<boolean>)
+    | null = null;
+
+  setNoticeDelivery(
+    deliver: (input: { chatId: string; text: string; key: string }) => Promise<boolean>,
+  ) {
+    this.deliverNotice = deliver;
+  }
 
   constructor(readonly store: LonoraStore) {}
 
@@ -82,7 +92,7 @@ export class LonoraService {
     };
   }
 
-  observe(next: Observation, now = Date.now()) {
+  observe(next: Observation) {
     const previous = this.store.getObservation<Observation>();
     const decision = decideMonitorAction(previous, next);
     if (!next.marketOpen) {
@@ -91,13 +101,51 @@ export class LonoraService {
       this.store.saveObservation(next);
     }
     const owner = this.store.ensureLocalOwner();
+    return {
+      decision,
+      message: decision.material
+        ? decision.reasons.join(", ")
+        : copy(owner.language, "notify.unchanged"),
+    };
+  }
+
+  async publishNotices(
+    decision: { notificationKeys: string[]; reasons: string[]; material: boolean },
+    now = Date.now(),
+  ) {
+    const owner = this.store.ensureLocalOwner();
+    const text = decision.material
+      ? decision.reasons.join(", ")
+      : copy(owner.language, "notify.unchanged");
     const notices = [];
     for (const key of decision.notificationKeys) {
       const existing = this.store.getNotice(key);
       if (!shouldNotify(existing, now)) {
         continue;
       }
-      const delivered = false;
+      let delivered = false;
+      let payload = text;
+      if (!owner.telegramChatId) {
+        payload = copy(owner.language, "notify.telegramMissing");
+      } else if (!this.deliverNotice) {
+        payload = copy(owner.language, "notify.deliveryFailed");
+      } else {
+        try {
+          delivered = await this.deliverNotice({
+            chatId: owner.telegramChatId,
+            text,
+            key,
+          });
+          if (!delivered) {
+            payload = copy(owner.language, "notify.deliveryFailed");
+          }
+        } catch (error) {
+          payload =
+            error instanceof Error
+              ? error.message.slice(0, 180)
+              : copy(owner.language, "notify.deliveryFailed");
+        }
+      }
       const notice = nextNotice(
         existing
           ? {
@@ -112,16 +160,10 @@ export class LonoraService {
         now,
         delivered,
       );
-      this.store.saveNotice({ ...notice, payload: decision.reasons.join(",") });
+      this.store.saveNotice({ ...notice, payload });
       notices.push(notice);
     }
-    return {
-      decision,
-      notices,
-      message: decision.material
-        ? decision.reasons.join(", ")
-        : copy(owner.language, "notify.unchanged"),
-    };
+    return notices;
   }
 
   readCandles(count?: number) {
@@ -179,33 +221,43 @@ export class LonoraService {
         this.gradeRecommendations(candles);
       }
     }
-    const observed = this.observe(
-      {
-        candleTime,
-        price,
-        session: clock.session,
-        marketOpen: clock.isOpen,
-        atr,
-        structureEventKey,
-        recommendationFingerprint: this.store
-          .listRecommendations()
-          .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
-          .join("|"),
-      },
-      now,
-    );
+    const observed = this.observe({
+      candleTime,
+      price,
+      session: clock.session,
+      marketOpen: clock.isOpen,
+      atr,
+      structureEventKey,
+      recommendationFingerprint: this.store
+        .listRecommendations()
+        .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
+        .join("|"),
+    });
+    await this.publishNotices(observed.decision, now);
     if (observed.decision.deepAnalysis && candles.length > 0 && this.withinBudget(now)) {
       const result = this.delegate({ agent: "structure-analyst", candles });
       this.lastAssessment = "summary" in result ? result.summary : null;
     }
+    const language = this.store.getOwner()?.language ?? "en";
     for (const row of this.store.listResponsibilities()) {
-      if (row.status !== "running") {
+      if (row.status !== "running" && row.status !== "scheduled") {
         continue;
       }
+      const check = checkResponsibility(row.instruction, observed.decision, clock.isOpen);
+      if (row.status === "scheduled" && check.waiting) {
+        this.store.saveResponsibility({ ...row, lastCheckAt: now });
+        continue;
+      }
+      const lastEvent = check.closed
+        ? copy(language, "tasks.waitingClosed")
+        : check.matched.length > 0
+          ? `${copy(language, "tasks.matched")} ${check.matched.join(", ")}`
+          : copy(language, "tasks.waiting");
       this.store.saveResponsibility({
         ...row,
         lastCheckAt: now,
-        lastEvent: observed.message,
+        nextCheckAt: check.closed ? null : now + 60_000,
+        lastEvent,
       });
     }
     return { ...observed, dataStatus: this.lastDataStatus, assessment: this.lastAssessment };
@@ -294,6 +346,7 @@ export class LonoraService {
     title: string;
     instruction: string;
     status?: ResponsibilityRow["status"];
+    lastEvent?: string | null;
   }): ResponsibilityRow {
     const existing = input.id
       ? this.store.listResponsibilities().find((row) => row.id === input.id)
@@ -305,7 +358,7 @@ export class LonoraService {
       status: input.status ?? existing?.status ?? "running",
       lastCheckAt: existing?.lastCheckAt ?? null,
       nextCheckAt: existing?.nextCheckAt ?? null,
-      lastEvent: existing?.lastEvent ?? null,
+      lastEvent: input.lastEvent ?? existing?.lastEvent ?? null,
     };
     this.store.saveResponsibility(row);
     return row;

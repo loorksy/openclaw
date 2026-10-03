@@ -12,6 +12,14 @@ const COPY = {
     "tasks.resumed": "Resumed.",
     "tasks.cancelled": "Cancelled.",
     "notify.unchanged": "No meaningful gold change.",
+    "notify.telegramMissing": "Telegram is not bound, so this notice stayed here.",
+    "notify.deliveryFailed": "Telegram did not accept the notice.",
+    "tasks.waitingClosed": "Market is closed. Waiting for the next open.",
+    "tasks.waiting": "Still waiting. Nothing in this check matched the instruction.",
+    "tasks.matched": "Matched",
+    "tasks.scheduled": "Scheduled",
+    "tasks.scheduleRejected":
+      "The scheduler did not accept this briefing. The monitor will still check it.",
     "trade.blocked": "Lonora will not place that trade. Only you can confirm an order.",
   },
   ar: {
@@ -25,6 +33,13 @@ const COPY = {
     "tasks.resumed": "استؤنفت المهمة.",
     "tasks.cancelled": "أُلغيت المهمة.",
     "notify.unchanged": "لا تغيير مهم في الذهب.",
+    "notify.telegramMissing": "تيليجرام غير مربوط، فبقي التنبيه هنا.",
+    "notify.deliveryFailed": "تيليجرام لم يقبل التنبيه.",
+    "tasks.waitingClosed": "السوق مغلق. الانتظار حتى الفتح التالي.",
+    "tasks.waiting": "ما زال الانتظار. هذا الفحص لا يطابق التعليمات.",
+    "tasks.matched": "تطابق",
+    "tasks.scheduled": "مجدول",
+    "tasks.scheduleRejected": "المجدول لم يقبل الإحاطة. المراقبة ستستمر في فحصها.",
     "trade.blocked": "لونورا لن تنفّذ هذه الصفقة. التأكيد اليدوي لك وحدك.",
   },
 } as const;

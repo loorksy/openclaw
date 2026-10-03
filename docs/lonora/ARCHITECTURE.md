@@ -37,6 +37,8 @@ The Lonora store holds one owner row. A Boty migration with more than one user f
 
 The service timer is not an LLM loop. One pass runs at a time. Each pass reads the gold clock, fetches closed candles only when the market is open and OANDA is configured, then runs deterministic structure checks. A specialist run is recorded only after a material change, and only inside the optional daily budget. Usage rows take the provider and model from the model event. An unpriced usage event fails that budget closed. Failed notices wait before the next attempt. A monitor exception is stored as a failed data status. Direct session spawn is blocked. Specialist bursts are capped from recent recorded runs, and the model cannot set its own depth.
 
+A material notice is sent through the gateway message tool to the bound Telegram chat. If Telegram is unbound or the send fails, the notice stays failed with a recorded reason. A morning or daily briefing is registered as a weekday 08:00 America/New_York cron turn when the host scheduler accepts it. Other responsibilities stay on the monitor and record whether the latest check matched the instruction, is still waiting, or is waiting because gold is closed. A scheduled briefing is not rewritten as "still waiting" on every monitor pass.
+
 ## Sequence already started
 
 1. Audit and this map.

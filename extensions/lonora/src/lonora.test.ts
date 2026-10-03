@@ -14,6 +14,7 @@ import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js
 import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { probeProvider } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
+import { checkResponsibility, cronForResponsibility } from "./domain/responsibilities.js";
 import { dailyBudgetAllows, estimateCostUsd, rollupUsage, usageIdentity } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
@@ -314,6 +315,31 @@ describe("responsibilities, memory, usage", () => {
     second.store.close();
   });
 
+  it("maps a morning briefing onto a weekday New York cron", () => {
+    expect(cronForResponsibility("Every morning prepare a gold briefing")).toEqual({
+      expr: "0 8 * * 1-5",
+      tz: "America/New_York",
+    });
+    expect(cronForResponsibility("كل صباح حضّر إحاطة")).toEqual({
+      expr: "0 8 * * 1-5",
+      tz: "America/New_York",
+    });
+    expect(cronForResponsibility("Watch structure")).toBeNull();
+  });
+
+  it("matches a structure instruction only when structure changes", () => {
+    expect(
+      checkResponsibility(
+        "Tell me if structure changes.",
+        { reasons: ["structure_change", "new_candle"] },
+        true,
+      ),
+    ).toEqual({ matched: ["structure_change"], waiting: false, closed: false });
+    expect(
+      checkResponsibility("Tell me if structure changes.", { reasons: ["new_candle"] }, false),
+    ).toEqual({ matched: [], waiting: true, closed: true });
+  });
+
   it("attributes estimated cost by provider and feature", () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);
@@ -503,6 +529,69 @@ describe("market data", () => {
     expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
     expect(service.marketSnapshot(closedAt).invented).toBe(false);
     store.close();
+  });
+
+  it("sends a closed-session notice only when Telegram is bound", async () => {
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    const previous = {
+      candleTime: 1,
+      price: 2300,
+      session: "asia",
+      marketOpen: true,
+      atr: 1,
+      structureEventKey: null,
+      recommendationFingerprint: "",
+    };
+    const unbound = LonoraStore.open(":memory:");
+    const waiting = new LonoraService(unbound);
+    const missed: string[] = [];
+    waiting.setNoticeDelivery(async () => {
+      missed.push("sent");
+      return true;
+    });
+    unbound.saveObservation(previous);
+    await waiting.monitorOnce(closedAt);
+    expect(missed).toEqual([]);
+    expect(unbound.getNotice("session:newyork:closed")).toMatchObject({
+      status: "failed",
+      payload: copy("en", "notify.telegramMissing"),
+    });
+    unbound.close();
+
+    const bound = LonoraStore.open(":memory:");
+    const service = new LonoraService(bound);
+    expect(service.bindTelegram("555").ok).toBe(true);
+    const sent: string[] = [];
+    service.setNoticeDelivery(async ({ chatId, key }) => {
+      sent.push(`${chatId}:${key}`);
+      return true;
+    });
+    bound.saveObservation(previous);
+    service.upsertResponsibility({
+      title: "Morning briefing",
+      instruction: "Every morning prepare a gold briefing",
+      status: "scheduled",
+      lastEvent: "Scheduled 0 8 * * 1-5 America/New_York.",
+    });
+    service.upsertResponsibility({
+      title: "Watch structure",
+      instruction: "Tell me if structure changes.",
+      status: "running",
+    });
+    await service.monitorOnce(closedAt);
+    expect(sent).toEqual(["555:session:newyork:closed"]);
+    expect(bound.getNotice("session:newyork:closed")?.status).toBe("delivered");
+    const rows = bound.listResponsibilities();
+    expect(rows.find((row) => row.status === "scheduled")).toMatchObject({
+      lastEvent: "Scheduled 0 8 * * 1-5 America/New_York.",
+      lastCheckAt: closedAt,
+    });
+    expect(rows.find((row) => row.status === "running")).toMatchObject({
+      lastEvent: copy("en", "tasks.waitingClosed"),
+      nextCheckAt: null,
+      lastCheckAt: closedAt,
+    });
+    bound.close();
   });
 });
 

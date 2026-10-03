@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import {
@@ -9,6 +10,8 @@ import { definePluginEntry, type OpenClawPluginApi } from "openclaw/plugin-sdk/p
 import { Type } from "typebox";
 import type { SpecialistId } from "./src/domain/agents.js";
 import type { Candle } from "./src/domain/candles.js";
+import { copy } from "./src/domain/copy.js";
+import { cronForResponsibility } from "./src/domain/responsibilities.js";
 import { usageIdentity } from "./src/domain/usage.js";
 import { LONORA_SYSTEM_CONTEXT, LONORA_TOOL_ALLOW, lonoraToolDecision } from "./src/policy.js";
 import { LonoraService } from "./src/service.js";
@@ -71,6 +74,19 @@ export default definePluginEntry({
         service.dailyBudgetUsd =
           typeof config.dailyBudgetUsd === "number" ? config.dailyBudgetUsd : null;
         service.ownerStatus();
+        service.setNoticeDelivery(async ({ chatId, text, key }) => {
+          const result = await api.runtime.gateway.request<{ ok?: boolean }>("tools.invoke", {
+            name: "message",
+            args: {
+              action: "send",
+              channel: "telegram",
+              target: chatId,
+              message: text,
+            },
+            idempotencyKey: `lonora-${key}`,
+          });
+          return result?.ok === true;
+        });
         const tick = () => {
           const current = service;
           if (!current) {
@@ -269,15 +285,42 @@ export default definePluginEntry({
         title: Type.Optional(Text),
         instruction: Type.Optional(Text),
       }),
-      (params) => {
+      async (params) => {
         const current = requireService();
         if (params.action === "list") {
           return current.store.listResponsibilities();
         }
         if (params.action === "create") {
+          const instruction = String(params.instruction ?? "");
+          const title = String(params.title ?? "Responsibility");
+          const cron = cronForResponsibility(instruction);
+          if (!cron) {
+            return current.upsertResponsibility({ title, instruction });
+          }
+          const language = current.ownerStatus().language;
+          let scheduled = false;
+          try {
+            const job = await api.session.workflow.scheduleSessionTurn({
+              sessionKey: "agent:main:main",
+              message: instruction,
+              cron: cron.expr,
+              tz: cron.tz,
+              deleteAfterRun: false,
+              name: `lonora-${randomUUID().slice(0, 8)}`,
+              tag: "lonora",
+              deliveryMode: "announce",
+            });
+            scheduled = job != null;
+          } catch {
+            scheduled = false;
+          }
           return current.upsertResponsibility({
-            title: String(params.title ?? "Responsibility"),
-            instruction: String(params.instruction ?? ""),
+            title,
+            instruction,
+            status: scheduled ? "scheduled" : "running",
+            lastEvent: scheduled
+              ? `${copy(language, "tasks.scheduled")} ${cron.expr} ${cron.tz}.`
+              : copy(language, "tasks.scheduleRejected"),
           });
         }
         const status =
