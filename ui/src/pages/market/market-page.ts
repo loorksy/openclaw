@@ -34,6 +34,7 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private candles: ChartCandle[] = [];
   @state() private latestSweep: { side: "buy_side" | "sell_side"; sweptLevel: number } | null =
     null;
+  @state() private pattern: SwingRangeView | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -72,6 +73,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.snapshot = null;
       this.candles = [];
       this.latestSweep = null;
+      this.pattern = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -200,6 +202,7 @@ class MarketPage extends OpenClawLightDomElement {
     if (!target.ok) {
       this.candles = [];
       this.latestSweep = null;
+      this.pattern = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -208,6 +211,7 @@ class MarketPage extends OpenClawLightDomElement {
         ok: boolean;
         candles: ChartCandle[];
         latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
+        pattern?: SwingRangeView | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -216,6 +220,8 @@ class MarketPage extends OpenClawLightDomElement {
       }
       this.candles = read.invented ? [] : read.candles;
       this.latestSweep = read.invented ? null : (read.latestSweep ?? null);
+      this.pattern =
+        read.invented || read.pattern?.inventedTarget !== false ? null : (read.pattern ?? null);
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -223,6 +229,7 @@ class MarketPage extends OpenClawLightDomElement {
       }
       this.candles = [];
       this.latestSweep = null;
+      this.pattern = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -291,6 +298,8 @@ class MarketPage extends OpenClawLightDomElement {
                 ${renderChart(this.candles, this.chartError)}
                 <h2>${t("lonora.market.sweep")}</h2>
                 <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
+                <h2>${t("lonora.market.pattern")}</h2>
+                <p>${patternText(this.pattern, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.activeRecommendations")}</h2>
                 ${
                   snapshot.recommendations.length
@@ -316,6 +325,48 @@ class MarketPage extends OpenClawLightDomElement {
         }
       </section>
     `;
+  }
+}
+
+type SwingRangeView = {
+  stage: string;
+  high: number | null;
+  low: number | null;
+  inventedTarget: false;
+};
+
+function patternText(pattern: SwingRangeView | null, error: string | null, candleCount: number) {
+  if (!pattern) {
+    if (error && candleCount === 0) {
+      return t("lonora.market.chartUnavailable");
+    }
+    return t("lonora.market.patternUnknown");
+  }
+  const stage = patternStageLabel(pattern.stage);
+  if (pattern.low == null || pattern.high == null || pattern.stage === "unclassified") {
+    return stage;
+  }
+  return `${stage} ${pattern.low}–${pattern.high}`;
+}
+
+function patternStageLabel(stage: string) {
+  switch (stage) {
+    case "unclassified":
+      return t("lonora.market.patternUnclassified");
+    case "starting":
+      return t("lonora.market.patternStarting");
+    case "forming":
+      return t("lonora.market.patternForming");
+    case "near_completion":
+      return t("lonora.market.patternNear");
+    case "completed_unconfirmed":
+      return t("lonora.market.patternCompleted");
+    case "confirmed":
+      return t("lonora.market.patternConfirmed");
+    case "failed":
+      return t("lonora.market.patternFailed");
+    default:
+      return t("lonora.market.patternUnknown");
   }
 }
 

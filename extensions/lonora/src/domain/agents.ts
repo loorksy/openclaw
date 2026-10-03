@@ -17,6 +17,7 @@ import { copy } from "./copy.js";
 import { describeHeadlines, type NewsHeadline } from "./headlines.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import type { OwnerLanguage } from "./owner.js";
+import { classifySwingRange, describePattern } from "./patterns.js";
 import { detectStructureEvents, latestStructureEvent } from "./structure.js";
 
 export const SPECIALISTS = [
@@ -87,13 +88,15 @@ export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
   const events = detectStructureEvents(candles, swings, atr);
   const latest = latestStructureEvent(events);
   const levels = detectMajorLevels(candles);
+  const pattern = classifySwingRange(candles);
+  const patternText = describePattern(pattern, "en");
   return {
     agent: "structure-analyst",
     ok: true,
     summary: latest
-      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}`
-      : `${trend} with ${swings.length} swings and no fresh break`,
-    data: { trend, swings, events, latest, levels, atr },
+      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}`
+      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}`,
+    data: { trend, swings, events, latest, levels, atr, pattern },
   };
 }
 

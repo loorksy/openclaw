@@ -84,6 +84,8 @@ describe("structure", () => {
     const result = runSpecialist("structure-analyst", { candles });
     expect(result.ok).toBe(true);
     expect(result.summary).toContain("uptrend");
+    expect(result.summary.toLowerCase()).not.toMatch(/quiet|no pattern/);
+    expect(result.data.pattern).toMatchObject({ inventedTarget: false });
     expect(result.summary).not.toBe("reviewed supplied evidence");
   });
 
@@ -819,6 +821,7 @@ describe("market data", () => {
     const read = await service.readVisibleCandles(now);
     expect(read.invented).toBe(false);
     expect(read.candles.map((candle) => candle.close)).toEqual([2305]);
+    expect(read.pattern).toMatchObject({ stage: "unclassified", inventedTarget: false });
     store.close();
   });
 

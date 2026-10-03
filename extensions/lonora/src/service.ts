@@ -34,6 +34,7 @@ import {
   type Observation,
 } from "./domain/monitor.js";
 import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
+import { classifySwingRange } from "./domain/patterns.js";
 import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
@@ -249,6 +250,7 @@ export class LonoraService {
       return {
         ok: false as const,
         candles: [] as Candle[],
+        pattern: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -264,6 +266,7 @@ export class LonoraService {
       ok: visible.candles.length > 0,
       candles: visible.candles,
       latestSweep: liquidity.latest,
+      pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",

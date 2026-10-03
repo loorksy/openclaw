@@ -57,6 +57,13 @@ const COPY = {
     "memory.scenario": "Scenario:",
     "memory.lessons": "Lessons:",
     "memory.tasks": "Responsibilities:",
+    "pattern.unclassified": "The swing range is not classified yet.",
+    "pattern.starting": "A swing range is starting.",
+    "pattern.forming": "A swing range is forming.",
+    "pattern.near": "A swing range is near completion.",
+    "pattern.completed": "A close moved beyond the swing range. Confirmation is still open.",
+    "pattern.confirmed": "A later close confirmed the move beyond the swing range.",
+    "pattern.failed": "The swing range failed.",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -109,6 +116,13 @@ const COPY = {
     "memory.scenario": "السيناريو:",
     "memory.lessons": "الدروس:",
     "memory.tasks": "المسؤوليات:",
+    "pattern.unclassified": "نطاق التأرجح لم يُصنَّف بعد.",
+    "pattern.starting": "نطاق تأرجح بدأ يتكوّن.",
+    "pattern.forming": "نطاق تأرجح قيد التكوّن.",
+    "pattern.near": "نطاق التأرجح قارب الاكتمال.",
+    "pattern.completed": "إغلاق تجاوز نطاق التأرجح. التأكيد ما زال مفتوحاً.",
+    "pattern.confirmed": "إغلاق لاحق أكّد الحركة خارج نطاق التأرجح.",
+    "pattern.failed": "فشل نطاق التأرجح.",
   },
 } as const;
 

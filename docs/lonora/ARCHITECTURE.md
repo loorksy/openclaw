@@ -27,7 +27,7 @@ Lonora is a private, single-owner gold market operator. This repository is a for
 - The default OpenClaw tool profile stays `full` so existing runtime tests keep their contract. Lonora narrows the model with `before_prompt_build` and blocks coding tools in `before_tool_call`.
 - Settings and sidebar lists are pinned by UI tests. Those tests were updated with the owner navigation.
 - The Lonora SQLite file is opened by the plugin service. Gateway database rules prefer a worker. This store is plugin-owned state, not the Gateway database.
-- Live candles require `OANDA_API_TOKEN`. Without it the market page reports unavailable data and does not invent a price. The chart draws only closed candles that are already visible at the current time.
+- Live candles require `OANDA_API_TOKEN`. Without it the market page reports unavailable data and does not invent a price. The chart draws only closed candles that are already visible at the current time. A swing range is classified from those closes: a wick does not complete it, a short sample stays unclassified, and no measured-move target is stored.
 - `lonora_execute_trade` never calls a broker. The tool hook ignores model-supplied confirmation. The manual path returns `not_linked` until a real adapter is intentionally added.
 
 ## One owner
