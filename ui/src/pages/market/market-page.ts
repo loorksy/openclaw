@@ -28,7 +28,7 @@ type MarketSnapshot = {
     status: string;
     statusLabel?: string;
   }[];
-  responsibilities: { id: string; title: string; status: string }[];
+  responsibilities: { id: string; title: string; status: string; statusLabel?: string }[];
   dataStatus?: string;
   dataError?: string | null;
   assessment?: string | null;
@@ -455,7 +455,7 @@ class MarketPage extends OpenClawLightDomElement {
                   snapshot.responsibilities.length
                     ? html`<ul>
                         ${snapshot.responsibilities.map(
-                          (row) => html`<li>${row.title} · ${row.status}</li>`,
+                          (row) => html`<li>${row.title} · ${row.statusLabel || row.status}</li>`,
                         )}
                       </ul>`
                     : html`<p>${t("lonora.market.noResponsibilities")}</p>`

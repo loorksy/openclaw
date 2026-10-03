@@ -470,7 +470,7 @@ export default definePluginEntry({
     );
     api.registerGatewayMethod(
       "lonora.tasks.list",
-      handle(() => requireService().store.listResponsibilities()),
+      handle(() => requireService().tasksView()),
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(

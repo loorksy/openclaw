@@ -815,6 +815,22 @@ describe("responsibilities, memory, usage", () => {
     expect(second.ownerBrief()).toBe(brief);
     second.store.setLanguage("ar");
     expect(second.ownerBrief()).toContain("ذاكرة الذهب");
+    const named = new LonoraService(LonoraStore.open(":memory:"));
+    const watch = named.upsertResponsibility({
+      title: "Watch gold",
+      instruction: "Tell me if structure changes.",
+    });
+    expect(named.tasksView()[0]?.status).toBe("running");
+    expect(named.tasksView()[0]?.statusLabel).toBe("Running");
+    named.store.setLanguage("ar");
+    named.setResponsibilityStatus(watch.id, "paused");
+    const paused = named.tasksView().find((row) => row.id === watch.id);
+    expect(paused?.status).toBe("paused");
+    expect(paused?.statusLabel).toBe("متوقفة");
+    expect(paused?.statusLabel).not.toBe("Paused");
+    named.setResponsibilityStatus(watch.id, "running");
+    expect(named.marketSnapshot().responsibilities[0]?.statusLabel).toBe("تعمل");
+    named.store.close();
     const empty = new LonoraService(LonoraStore.open(":memory:"));
     const emptyAt = Date.UTC(2026, 0, 14, 15, 0);
     expect(empty.ownerBrief(emptyAt)).toBe(

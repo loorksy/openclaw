@@ -150,7 +150,7 @@ export class LonoraService {
         .listRecommendations()
         .filter((plan) => plan.outcome === "pending")
         .map((plan) => ({ ...plan, ...recommendationLabels(plan, owner.language) })),
-      responsibilities: this.store.listResponsibilities().filter((row) => row.status === "running"),
+      responsibilities: this.tasksView().filter((row) => row.status === "running"),
     };
   }
 
@@ -926,6 +926,14 @@ export class LonoraService {
     return lines.join(" ").slice(0, 700);
   }
 
+  tasksView() {
+    const language = this.store.ensureLocalOwner().language;
+    return this.store.listResponsibilities().map((row) => ({
+      ...row,
+      statusLabel: copy(language, taskStatusKey(row.status)),
+    }));
+  }
+
   upsertResponsibility(input: {
     id?: string;
     title: string;
@@ -1240,6 +1248,21 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
   }
   const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
   return ruleText ? `${ruleText} ${bandText}` : bandText;
+}
+
+function taskStatusKey(
+  status: ResponsibilityRow["status"],
+): "task.running" | "task.paused" | "task.scheduled" | "task.cancelled" {
+  switch (status) {
+    case "paused":
+      return "task.paused";
+    case "scheduled":
+      return "task.scheduled";
+    case "cancelled":
+      return "task.cancelled";
+    default:
+      return "task.running";
+  }
 }
 
 function recommendationLabels(
