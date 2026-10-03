@@ -509,6 +509,28 @@ describe("responsibilities, memory, usage", () => {
     const empty = new LonoraService(LonoraStore.open(":memory:"));
     expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
     expect(empty.ownerBrief()).not.toMatch(/%/);
+    const blank = empty.delegate({ agent: "memory-curator", note: "   \n  " });
+    expect(blank.ok).toBe(true);
+    expect(blank.summary).toBe(copy("en", "memory.none"));
+    expect(empty.recall("lesson", "lesson")).toEqual([]);
+    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    const note = `New York continuation   ${"x".repeat(400)}`;
+    const stored = empty.delegate({ agent: "memory-curator", note });
+    expect(stored.summary).toBe(copy("en", "memory.stored"));
+    expect(stored.summary).not.toMatch(/candidate/i);
+    const lessons = empty.recall("New York", "lesson");
+    expect(lessons).toHaveLength(1);
+    expect(lessons[0]?.content.length).toBeLessThanOrEqual(240);
+    expect(lessons[0]?.content.startsWith("New York continuation x")).toBe(true);
+    expect(empty.ownerBrief()).toContain(lessons[0]?.content ?? "missing");
+    expect(empty.agentsView().find((agent) => agent.agent === "memory-curator")?.lastResult).toBe(
+      copy("en", "memory.stored"),
+    );
+    empty.store.setLanguage("ar");
+    expect(empty.delegate({ agent: "memory-curator", note: "الدرس العربي" }).summary).toBe(
+      copy("ar", "memory.stored"),
+    );
+    expect(empty.ownerBrief()).toContain("الدرس العربي");
     empty.store.close();
     second.store.close();
   });
@@ -675,6 +697,8 @@ describe("delegation and migration", () => {
     expect(burst.delegate({ agent: "memory-curator", note: "one more" }).failure).toBe(
       "delegation_limit",
     );
+    expect(burst.recall("one more", "lesson")).toEqual([]);
+    expect(burst.recall("lesson 0", "lesson")).toHaveLength(1);
     burst.store.close();
     store.close();
   });

@@ -300,15 +300,16 @@ export function runSpecialist(
         data: { report },
       };
     }
-    case "memory-curator":
+    case "memory-curator": {
+      const lesson = (input.note ?? "").replace(/\s+/g, " ").trim().slice(0, 240).trim();
+      const language = input.language ?? "en";
       return {
         agent: id,
         ok: true,
-        summary: input.note?.trim()
-          ? "Compacted the supplied note into a lesson candidate."
-          : "No new lesson was supplied.",
-        data: { lesson: input.note?.trim() || null },
+        summary: lesson ? lesson : copy(language, "memory.none"),
+        data: { lesson: lesson || null },
       };
+    }
     case "system-guardian":
       return {
         agent: id,

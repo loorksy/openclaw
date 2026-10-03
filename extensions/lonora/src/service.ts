@@ -723,18 +723,30 @@ export class LonoraService {
       input.agent === "research-agent"
         ? [scenario, input.note].filter((part) => part && part.trim().length > 0).join(" ")
         : input.note;
+    const language = this.store.ensureLocalOwner().language;
     const result = runSpecialist(input.agent, {
       ...input,
       note,
-      language: this.store.ensureLocalOwner().language,
+      language,
     });
+    const lesson =
+      input.agent === "memory-curator" && result.ok && typeof result.data.lesson === "string"
+        ? result.data.lesson
+        : "";
+    if (lesson) {
+      this.remember("lesson", lesson, "XAUUSD");
+    }
+    const summary =
+      input.agent === "memory-curator" && result.ok
+        ? copy(language, lesson ? "memory.stored" : "memory.none")
+        : result.summary;
     this.store.recordAgentRun({
       agent: input.agent,
       parentRunId: input.parentRunId,
       status: result.ok ? "ok" : "failed",
-      summary: result.summary,
+      summary,
     });
-    return result;
+    return { ...result, summary };
   }
 
   agentsView() {

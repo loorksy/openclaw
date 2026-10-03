@@ -562,7 +562,7 @@ export class LonoraStore {
     outputTokens: number;
   }[] {
     const rows = this.db
-      .prepare("SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT 50")
+      .prepare("SELECT * FROM agent_runs ORDER BY started_at DESC, rowid DESC LIMIT 50")
       .all() as {
       id: string;
       agent: string;
