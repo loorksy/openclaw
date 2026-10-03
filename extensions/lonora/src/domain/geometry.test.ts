@@ -72,6 +72,7 @@ describe("prepare gold plan", () => {
     expect(prepared.plan.targets[0]).toBeGreaterThan(prepared.plan.entry);
     expect(prepared.plan.outcome).toBe("pending");
     expect(prepared.plan.rationale).toContain("2296");
+    expect(prepared.plan.rationale).toMatch(/Zone grade [AB]/);
   });
 
   it("does not invent a plan when the candle sample is too short", () => {

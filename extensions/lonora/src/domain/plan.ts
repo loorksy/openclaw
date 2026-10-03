@@ -16,8 +16,11 @@ import {
 } from "./candles.js";
 import { copy } from "./copy.js";
 import { placeProtectedStop, roundToTick, tradeSpanFor } from "./geometry.js";
+import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import type { OwnerLanguage } from "./owner.js";
 import type { RecommendationPlan } from "./recommendations.js";
+import { rangeSpan, scoreZone, type ZoneScore } from "./score-poi.js";
+import { detectStructureEvents } from "./structure.js";
 
 const INTERVAL = "1h";
 
@@ -30,7 +33,12 @@ export interface PreparedPlan {
 
 export interface RejectedPlan {
   ok: false;
-  reason: "insufficient_candles" | "no_zone" | "no_structural_target" | "invalid_geometry";
+  reason:
+    | "insufficient_candles"
+    | "no_zone"
+    | "zone_weak"
+    | "no_structural_target"
+    | "invalid_geometry";
   message: string;
   invented: false;
   brokerCalled: false;
@@ -47,14 +55,19 @@ export function prepareGoldPlan(
   if (!last || atr == null) {
     return rejected("insufficient_candles", language);
   }
-  const zone = selectZone(visible, last.close);
-  if (!zone) {
-    return rejected("no_zone", language);
+  const zone = selectZone(visible, last.close, atr);
+  if (zone == null) {
+    return rejected(
+      detectSupplyDemandZones(visible).length === 0 ? "no_zone" : "zone_weak",
+      language,
+    );
   }
-  const action = zone.type === "demand" ? "buy" : "sell";
-  const inside = last.close >= zone.low && last.close <= zone.high;
-  const entry = roundToTick(inside ? last.close : action === "buy" ? zone.high : zone.low);
-  const structuralStop = action === "buy" ? zone.low : zone.high;
+  const action = zone.zone.type === "demand" ? "buy" : "sell";
+  const inside = last.close >= zone.zone.low && last.close <= zone.zone.high;
+  const entry = roundToTick(
+    inside ? last.close : action === "buy" ? zone.zone.high : zone.zone.low,
+  );
+  const structuralStop = action === "buy" ? zone.zone.low : zone.zone.high;
   const placed = placeProtectedStop({
     action,
     entry,
@@ -81,12 +94,16 @@ export function prepareGoldPlan(
     outcome: "pending",
     createdCandleTime: last.time,
     createdAt: now,
-    rationale: stopRationale(language, placed.structuralStop, placed.stop, placed.widened),
+    rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}.`,
   };
   return { ok: true, plan, invented: false, brokerCalled: false };
 }
 
-function selectZone(candles: Candle[], price: number): SupplyDemandZone | null {
+function selectZone(
+  candles: Candle[],
+  price: number,
+  atr: number,
+): { zone: SupplyDemandZone; score: ZoneScore } | null {
   const bias = biasFromCandles(candles);
   const preferred = bias === "bullish" ? "demand" : bias === "bearish" ? "supply" : null;
   const zones = detectSupplyDemandZones(candles);
@@ -95,7 +112,25 @@ function selectZone(candles: Candle[], price: number): SupplyDemandZone | null {
   const usable = pool.filter((zone) =>
     zone.type === "demand" ? price >= zone.low : price <= zone.high,
   );
-  return usable.at(-1) ?? null;
+  const swings = detectSwings(candles);
+  const levels = detectMajorLevels(candles);
+  const context = {
+    candles,
+    currentPrice: price,
+    atr,
+    structureEvents: detectStructureEvents(candles, swings, atr),
+    sweeps: analyzeLiquidity(candles).sweeps,
+    range: rangeSpan(candles),
+    htfLevels: [...levels.support, ...levels.resistance].map((level) => level.price),
+    otherZones: zones,
+  };
+  const ranked = usable
+    .map((zone) => ({ zone, score: scoreZone({ ...context, zone }) }))
+    .filter((item) => item.score.tradable)
+    .sort(
+      (left, right) => right.score.score - left.score.score || right.zone.time - left.zone.time,
+    );
+  return ranked[0] ?? null;
 }
 
 function selectTarget(
@@ -135,8 +170,10 @@ function rejected(reason: RejectedPlan["reason"], language: OwnerLanguage): Reje
       ? "plan.insufficient"
       : reason === "no_zone"
         ? "plan.noZone"
-        : reason === "no_structural_target"
-          ? "plan.noTarget"
-          : "plan.invalid";
+        : reason === "zone_weak"
+          ? "plan.zoneWeak"
+          : reason === "no_structural_target"
+            ? "plan.noTarget"
+            : "plan.invalid";
   return { ok: false, reason, message: copy(language, key), invented: false, brokerCalled: false };
 }

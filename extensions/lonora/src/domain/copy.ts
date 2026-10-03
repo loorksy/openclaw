@@ -27,10 +27,12 @@ const COPY = {
     "calendar.unavailable": "No economic calendar is available. Lonora will not invent an event.",
     "plan.insufficient": "Closed candles are not enough to place a protected stop.",
     "plan.noZone": "No supply or demand zone is available, so no plan was prepared.",
+    "plan.zoneWeak": "The nearest zones are not tradable, so no plan was prepared.",
     "plan.noTarget": "No structural target clears the distance floor, so no plan was prepared.",
     "plan.invalid": "The zone does not produce a valid stop, so no plan was prepared.",
     "plan.stopBeyond": "Stop sits beyond the structural level",
     "plan.widened": "The distance floor pushed it farther out.",
+    "plan.grade": "Zone grade",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -56,10 +58,12 @@ const COPY = {
     "calendar.unavailable": "التقويم الاقتصادي غير متاح. لن تخترع لونورا حدثاً.",
     "plan.insufficient": "الشموع المغلقة لا تكفي لوضع وقف محمي.",
     "plan.noZone": "لا توجد منطقة عرض أو طلب، لذلك لم تُجهَّز خطة.",
+    "plan.zoneWeak": "المناطق القريبة غير قابلة للتداول، لذلك لم تُجهَّز خطة.",
     "plan.noTarget": "لا يوجد هدف هيكلي يجتاز حد المسافة، لذلك لم تُجهَّز خطة.",
     "plan.invalid": "المنطقة لا تنتج وقفاً صالحاً، لذلك لم تُجهَّز خطة.",
     "plan.stopBeyond": "الوقف يقع بعد المستوى الهيكلي",
     "plan.widened": "حد المسافة دفعه أبعد.",
+    "plan.grade": "درجة المنطقة",
   },
 } as const;
 
