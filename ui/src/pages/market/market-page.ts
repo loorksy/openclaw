@@ -343,7 +343,7 @@ class MarketPage extends OpenClawLightDomElement {
                   <dd>${marketPriceLabel(snapshot)}</dd>
                   ${snapshot.dataError ? html`<p role="status">${snapshot.dataError}</p>` : nothing}
                   <dt>${t("lonora.market.assessment")}</dt>
-                  <dd>${snapshot.assessment ?? snapshot.message}</dd>
+                  <dd>${snapshot.assessment ?? t("lonora.market.chartUnavailable")}</dd>
                   <dt>${t("lonora.market.calendar")}</dt>
                   <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
                   <dt>${t("lonora.market.memory")}</dt>

@@ -143,7 +143,7 @@ export class LonoraService {
       invented: false,
       dataStatus: clock.isOpen ? this.lastDataStatus : "closed",
       dataError: this.lastDataError,
-      assessment: this.lastAssessment,
+      assessment: this.marketAssessment(owner.language),
       calendar: this.lastCalendar,
       headlines: this.lastHeadlines,
       recommendations: this.store
@@ -813,6 +813,25 @@ export class LonoraService {
 
   recall(query: string, kind?: MemoryKind) {
     return this.store.searchMemory(query, kind);
+  }
+
+  /**
+   * The latest specialist summary in this process, otherwise the stored reads.
+   * The session clock is a separate sentence and is not an assessment.
+   */
+  private marketAssessment(language: OwnerLanguage): string {
+    const current = this.lastAssessment?.trim();
+    if (current) {
+      return current;
+    }
+    const stored = [
+      this.store.listRecentMemory("market_observation", 1)[0]?.content,
+      this.store.listRecentMemory("structure_read", 1)[0]?.content,
+      this.store.listRecentMemory("liquidity_read", 1)[0]?.content,
+      this.store.listRecentMemory("zone_read", 1)[0]?.content,
+      this.store.listRecentMemory("timeframe_read", 1)[0]?.content,
+    ].filter((part): part is string => Boolean(part && part.trim()));
+    return stored.length > 0 ? stored.join(" ") : copy(language, "market.noRead");
   }
 
   /** Centers open on their own clocks. Does not describe how price will move. */

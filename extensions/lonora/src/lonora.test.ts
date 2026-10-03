@@ -1453,6 +1453,34 @@ describe("market data", () => {
     }
   });
 
+  it("keeps the session clock out of the market assessment", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const now = Date.UTC(2026, 0, 14, 15, 0);
+    const fresh = service.marketSnapshot(now);
+    expect(fresh.centers).toContain("London");
+    expect(fresh.message).toContain("Gold is open");
+    expect(fresh.assessment).toBe("No gold read is stored yet.");
+    expect(fresh.assessment).not.toContain("Gold is open");
+
+    store.setLanguage("ar");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: breakCandles("short"),
+      price: 100,
+      stale: false,
+      invented: false,
+    });
+    await service.readVisibleCandles(now);
+    const restarted = new LonoraService(store);
+    const kept = restarted.marketSnapshot(now);
+    expect(kept.assessment).toContain("الإطار الزمني الأعلى لم يُقرأ");
+    expect(kept.assessment).not.toContain("Gold is open");
+    expect(kept.assessment).not.toContain("سوق الذهب مفتوح");
+    expect(kept.message).toContain("سوق الذهب مفتوح");
+    store.close();
+  });
+
   it("names the open centers on the market snapshot", () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);
