@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -21,6 +21,7 @@ import {
 } from "./domain/responsibilities.js";
 import { dailyBudgetAllows, estimateCostUsd, rollupUsage, usageIdentity } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
+import { LONORA_TOOL_ALLOW } from "./policy.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
 
@@ -105,6 +106,18 @@ function candle(time: number, low: number, high: number, close = (low + high) / 
   return { time, open: close, high, low, close };
 }
 
+describe("plugin contract", () => {
+  it("declares every Lonora model tool, including headlines", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+    ) as { contracts: { tools: string[] } };
+    const owned = LONORA_TOOL_ALLOW.filter((name) => name.startsWith("lonora_"));
+    expect(owned.every((name) => manifest.contracts.tools.includes(name))).toBe(true);
+    expect(manifest.contracts.tools).toContain("lonora_headlines");
+    expect(manifest.contracts.tools).toContain("lonora_execute_trade");
+  });
+});
+
 describe("gold clock", () => {
   it("stays closed on Saturday and does not invent candles", () => {
     const saturday = Date.parse("2026-01-03T15:00:00Z");
@@ -134,10 +147,27 @@ describe("structure", () => {
     expect(detectTrend(swings)).toBe("uptrend");
     const result = runSpecialist("structure-analyst", { candles });
     expect(result.ok).toBe(true);
-    expect(result.summary).toContain("uptrend");
+    expect(result.summary).toContain("Uptrend.");
     expect(result.summary.toLowerCase()).not.toMatch(/quiet|no pattern/);
     expect(result.data.pattern).toMatchObject({ inventedTarget: false });
     expect(result.summary).not.toBe("reviewed supplied evidence");
+    const latest = result.data.latest as { brokenLevel?: number } | null;
+    if (latest?.brokenLevel != null) {
+      expect(result.summary).toContain(String(latest.brokenLevel));
+    } else {
+      expect(result.summary).toContain("No fresh close beyond a swing.");
+    }
+    const arabic = runSpecialist("structure-analyst", { candles, language: "ar" });
+    expect(arabic.summary).toContain("اتجاه صاعد");
+    expect(arabic.summary).not.toContain("Uptrend");
+    expect(arabic.summary).not.toContain("Break of structure");
+    const short = runSpecialist("structure-analyst", {
+      candles: candles.slice(0, 4),
+      language: "ar",
+    });
+    expect(short.ok).toBe(false);
+    expect(short.summary).toBe("الشموع المغلقة لا تكفي لقراءة الهيكل.");
+    expect(short.summary).not.toContain("لا إغلاق جديد");
   });
 
   it("reports a buy-side sweep from the closed candles", () => {
@@ -1135,7 +1165,8 @@ describe("market data", () => {
     expect(service.recall("100", "structure_read")).toEqual([]);
 
     await service.monitorOnce(openAt);
-    expect(service.ownerBrief()).toContain("Latest structure: Price is near the low of 100–121");
+    expect(service.ownerBrief()).toContain("Latest structure: No fresh close beyond a swing.");
+    expect(service.ownerBrief()).toContain("Price is near the low of 100–121");
     expect(service.ownerBrief()).not.toMatch(/%/);
     expect(service.recall("near the low", "structure_read")).toHaveLength(1);
     expect(service.remember("structure_read", "invented target 9999", "XAUUSD")).toBeNull();
@@ -1182,7 +1213,8 @@ describe("market data", () => {
       invented: false,
     });
     await service.readVisibleCandles(openAt);
-    expect(service.ownerBrief()).toContain("آخر قراءة: السعر قرب قاع النطاق 100–121");
+    expect(service.ownerBrief()).toContain("آخر قراءة: لا إغلاق جديد يتجاوز سوينغاً.");
+    expect(service.ownerBrief()).toContain("السعر قرب قاع النطاق 100–121");
     expect(service.ownerBrief()).not.toContain("Latest structure:");
     expect(service.ownerBrief()).not.toMatch(/%/);
     store.close();

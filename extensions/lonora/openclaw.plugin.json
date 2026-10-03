@@ -16,6 +16,7 @@
       "lonora_analyze_liquidity",
       "lonora_analyze_supply_demand",
       "lonora_calendar",
+      "lonora_headlines",
       "lonora_recommendations",
       "lonora_memory",
       "lonora_responsibility",

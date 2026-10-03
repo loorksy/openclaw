@@ -2,7 +2,9 @@
  * BOS / CHoCH / MSS detection. A break requires a close beyond the swing.
  * A wick-only poke is a sweep, not a break. Uncertain series emit nothing.
  */
-import { calculateAtr, type Candle, type Swing } from "./candles.js";
+import { calculateAtr, type Candle, type Swing, type TrendLabel } from "./candles.js";
+import { copy } from "./copy.js";
+import type { OwnerLanguage } from "./owner.js";
 
 export interface StructureEvent {
   type: "BOS" | "CHoCH" | "MSS";
@@ -80,6 +82,37 @@ export function latestStructureEvent(events: StructureEvent[]): StructureEvent |
   return events.at(-1) ?? null;
 }
 
+export function describeTrend(language: OwnerLanguage, trend: TrendLabel): string {
+  switch (trend) {
+    case "uptrend":
+      return copy(language, "structure.trend.uptrend");
+    case "downtrend":
+      return copy(language, "structure.trend.downtrend");
+    case "range":
+      return copy(language, "structure.trend.range");
+    default:
+      return copy(language, "structure.trend.unknown");
+  }
+}
+
+/** A break is a close beyond a swing. A missing event is not claimed on a short sample. */
+export function describeStructureBreak(
+  language: OwnerLanguage,
+  event: StructureEvent | null,
+): string {
+  if (!event) {
+    return copy(language, "structure.noBreak");
+  }
+  const kind =
+    event.type === "BOS"
+      ? "structure.bos"
+      : event.type === "MSS"
+        ? "structure.mss"
+        : "structure.choch";
+  const side = event.direction === "bullish" ? "structure.bullish" : "structure.bearish";
+  return `${copy(language, kind)} ${copy(language, side)} ${copy(language, "structure.at")} ${event.brokenLevel}.`;
+}
+
 function classifyBreak(input: {
   direction: "bullish" | "bearish";
   trend: 1 | -1 | 0;
@@ -100,8 +133,7 @@ function classifyBreak(input: {
   }
   strength = Math.max(5, Math.min(100, strength));
   const withTrend =
-    input.trend === 0 ||
-    (input.direction === "bullish" ? input.trend === 1 : input.trend === -1);
+    input.trend === 0 || (input.direction === "bullish" ? input.trend === 1 : input.trend === -1);
   const type: StructureEvent["type"] = withTrend
     ? "BOS"
     : bodyAtr >= 1.5 || (displacementAtr >= 1 && followThrough)

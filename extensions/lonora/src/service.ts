@@ -16,7 +16,13 @@ import {
   type CalendarRead,
   type EconomicEvent,
 } from "./domain/calendar.js";
-import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
+import {
+  calculateAtr,
+  detectSwings,
+  isGoldSymbol,
+  isSaneCandle,
+  type Candle,
+} from "./domain/candles.js";
 import { describeCandleShape, latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { latestOwnerText } from "./domain/conversation.js";
@@ -52,6 +58,11 @@ import { computeRangePosition, describeRange } from "./domain/range-position.js"
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility, responsibilityEventText } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
+import {
+  describeStructureBreak,
+  detectStructureEvents,
+  latestStructureEvent,
+} from "./domain/structure.js";
 import { describeTradingCenters, getTradingSessionInfo } from "./domain/trading-sessions.js";
 import {
   classifyFeature,
@@ -661,7 +672,17 @@ export class LonoraService {
     const prior = priorGoldDay(candles);
     const shape = latestCandleShape(candles);
     const range = computeRangePosition(candles, close);
+    const breakText =
+      candles.length >= 10
+        ? describeStructureBreak(
+            language,
+            latestStructureEvent(
+              detectStructureEvents(candles, detectSwings(candles), calculateAtr(candles)),
+            ),
+          )
+        : "";
     const text = [
+      breakText,
       range ? describeRange(language, range) : "",
       prior ? `${copy(language, "structure.prior")} ${prior.low}–${prior.high}` : "",
       describePattern(classifySwingRange(candles), language),

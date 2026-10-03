@@ -21,7 +21,12 @@ import type { OwnerLanguage } from "./owner.js";
 import { classifySwingRange, describePattern } from "./patterns.js";
 import { describeNearestZones, nearestGoldZones } from "./plan.js";
 import { computeRangePosition, describeRange } from "./range-position.js";
-import { detectStructureEvents, latestStructureEvent } from "./structure.js";
+import {
+  describeStructureBreak,
+  describeTrend,
+  detectStructureEvents,
+  latestStructureEvent,
+} from "./structure.js";
 
 export const SPECIALISTS = [
   "market-watcher",
@@ -85,12 +90,15 @@ export function assertDelegation(input: DelegationLimits & { requested: number }
   }
 }
 
-export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
+export function runStructureAnalyst(
+  candles: Candle[],
+  language: OwnerLanguage = "en",
+): SpecialistResult {
   if (candles.length < 10) {
     return {
       agent: "structure-analyst",
       ok: false,
-      summary: "Not enough closed candles to read structure.",
+      summary: copy(language, "structure.short"),
       data: { candles: candles.length },
       failure: "insufficient_candles",
     };
@@ -116,18 +124,18 @@ export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
       : [],
   );
   const pattern = classifySwingRange(candles);
-  const patternText = describePattern(pattern, "en");
+  const patternText = describePattern(pattern, language);
   const candleShape = latestCandleShape(candles);
-  const candleText = candleShape ? ` ${describeCandleShape(candleShape, "en")}` : "";
+  const candleText = candleShape ? ` ${describeCandleShape(candleShape, language)}` : "";
   const range = computeRangePosition(candles, candles.at(-1)?.close ?? null);
-  const rangeText = range ? ` ${describeRange("en", range)}.` : "";
-  const priorText = priorDay ? ` Prior gold day ${priorDay.low}–${priorDay.high}.` : "";
+  const rangeText = range ? ` ${describeRange(language, range)}.` : "";
+  const priorText = priorDay
+    ? ` ${copy(language, "structure.prior")} ${priorDay.low}–${priorDay.high}.`
+    : "";
   return {
     agent: "structure-analyst",
     ok: true,
-    summary: latest
-      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}${candleText}${rangeText}${priorText}`
-      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}${candleText}${rangeText}${priorText}`,
+    summary: `${describeTrend(language, trend)}. ${describeStructureBreak(language, latest)} ${patternText}${candleText}${rangeText}${priorText}`,
     data: { trend, swings, events, latest, levels, atr, pattern, candleShape },
   };
 }
@@ -260,7 +268,10 @@ export function runSpecialist(
   switch (id) {
     case "structure-analyst":
     case "market-watcher":
-      return { ...runStructureAnalyst(input.candles ?? []), agent: id };
+      return {
+        ...runStructureAnalyst(input.candles ?? [], input.language ?? "en"),
+        agent: id,
+      };
     case "liquidity-analyst":
       return runLiquidityAnalyst(input.candles ?? [], input.language ?? "en");
     case "supply-demand-analyst":
