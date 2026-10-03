@@ -13,6 +13,7 @@ const TOPIC_RULES: { pattern: RegExp; reasons: string[] }[] = [
     reasons: ["session_transition", "session_transition_while_closed"],
   },
   { pattern: /price|volatil|سعر|تذبذب/i, reasons: ["price_move", "volatility_change"] },
+  { pattern: /macro|calendar|news|cpi|nfp|fomc|تقويم|أخبار/i, reasons: ["macro_event"] },
 ];
 
 export function cronForResponsibility(

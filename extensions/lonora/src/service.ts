@@ -7,6 +7,13 @@ import {
   SPECIALISTS,
   type SpecialistId,
 } from "./domain/agents.js";
+import {
+  describeCalendarEvents,
+  readGoldCalendar,
+  upcomingHighImpactKey,
+  type CalendarRead,
+  type EconomicEvent,
+} from "./domain/calendar.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
 import { analyzeLiquidity, sweepKey } from "./domain/liquidity-sweeps.js";
@@ -18,7 +25,7 @@ import {
   shouldNotify,
   type Observation,
 } from "./domain/monitor.js";
-import { bindTelegram } from "./domain/owner.js";
+import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
 import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
@@ -39,6 +46,10 @@ export class LonoraService {
   private lastDataStatus = "unknown";
   private lastAssessment: string | null = null;
   private lastDataError: string | null = null;
+  private lastCalendar: { known: boolean; summary: string | null } = {
+    known: false,
+    summary: null,
+  };
   private activeMonitor: Promise<unknown> | null = null;
   private deliverNotice:
     | ((input: { chatId: string; text: string; key: string }) => Promise<boolean>)
@@ -88,6 +99,7 @@ export class LonoraService {
       dataStatus: clock.isOpen ? this.lastDataStatus : "closed",
       dataError: this.lastDataError,
       assessment: this.lastAssessment,
+      calendar: this.lastCalendar,
       recommendations: this.store
         .listRecommendations()
         .filter((plan) => plan.outcome === "pending"),
@@ -173,6 +185,27 @@ export class LonoraService {
     return readGoldCandles(count);
   }
 
+  async readCalendar(now = Date.now()): Promise<CalendarRead & { summary: string }> {
+    const language = this.store.ensureLocalOwner().language;
+    try {
+      const read = await readGoldCalendar({ now });
+      const summary = calendarSummary(read, language);
+      this.lastCalendar = { known: read.ok, summary };
+      return { ...read, summary };
+    } catch (error) {
+      const summary = copy(language, "calendar.unavailable");
+      this.lastCalendar = { known: false, summary };
+      return {
+        ok: false,
+        events: [],
+        invented: false,
+        stale: false,
+        summary,
+        error: error instanceof Error ? error.message.slice(0, 180) : summary,
+      };
+    }
+  }
+
   async readVisibleCandles(now = Date.now()) {
     const read = await this.readCandles(48);
     if (!read.ok) {
@@ -221,6 +254,10 @@ export class LonoraService {
   async monitorOnce(now = Date.now()) {
     const clock = readMarketClock(now);
     const previous = this.store.getObservation<Observation>();
+    const calendar = await this.readCalendar(now);
+    const macroEventKey = calendar.ok
+      ? upcomingHighImpactKey(calendar.events, now)
+      : (previous?.macroEventKey ?? null);
     let price = previous?.price ?? null;
     let candleTime = previous?.candleTime ?? null;
     let atr = previous?.atr ?? null;
@@ -261,20 +298,39 @@ export class LonoraService {
       atr,
       structureEventKey,
       sweepKey: sweep,
+      macroEventKey,
       recommendationFingerprint: this.store
         .listRecommendations()
         .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
         .join("|"),
     });
     await this.publishNotices(observed.decision, now);
-    if (observed.decision.deepAnalysis && candles.length > 0 && this.withinBudget(now)) {
-      const agent =
-        observed.decision.reasons.includes("liquidity_sweep") &&
-        !observed.decision.reasons.includes("structure_change")
-          ? "liquidity-analyst"
-          : "structure-analyst";
-      const result = this.delegate({ agent, candles });
-      this.lastAssessment = "summary" in result ? result.summary : null;
+    if (observed.decision.deepAnalysis && this.withinBudget(now)) {
+      const priceDeep = observed.decision.reasons.some((reason) =>
+        [
+          "structure_change",
+          "recommendation_change",
+          "volatility_change",
+          "liquidity_sweep",
+        ].includes(reason),
+      );
+      if (priceDeep && candles.length > 0) {
+        const agent =
+          observed.decision.reasons.includes("liquidity_sweep") &&
+          !observed.decision.reasons.includes("structure_change")
+            ? "liquidity-analyst"
+            : "structure-analyst";
+        const result = this.delegate({ agent, candles });
+        this.lastAssessment = "summary" in result ? result.summary : null;
+      }
+      if (observed.decision.reasons.includes("macro_event") && calendar.ok) {
+        const result = this.delegate({
+          agent: "macro-news-analyst",
+          events: calendar.events,
+          calendarKnown: true,
+        });
+        this.lastAssessment = "summary" in result ? result.summary : this.lastAssessment;
+      }
     }
     const language = this.store.getOwner()?.language ?? "en";
     for (const row of this.store.listResponsibilities()) {
@@ -437,6 +493,8 @@ export class LonoraService {
     stopLoss?: number;
     targets?: number[];
     note?: string;
+    events?: EconomicEvent[];
+    calendarKnown?: boolean;
     depth?: number;
     childCount?: number;
     parentRunId?: string;
@@ -461,7 +519,11 @@ export class LonoraService {
       return { ok: false as const, agent: input.agent, summary, failure: "delegation_limit" };
     }
     const note = input.agent === "research-agent" ? this.refreshScenarioMemory().text : input.note;
-    const result = runSpecialist(input.agent, { ...input, note });
+    const result = runSpecialist(input.agent, {
+      ...input,
+      note,
+      language: this.store.ensureLocalOwner().language,
+    });
     this.store.recordAgentRun({
       agent: input.agent,
       parentRunId: input.parentRunId,
@@ -572,6 +634,12 @@ export class LonoraService {
   }
 }
 
+function calendarSummary(read: CalendarRead, language: OwnerLanguage): string {
+  return read.ok
+    ? describeCalendarEvents(read.events, language)
+    : copy(language, "calendar.unavailable");
+}
+
 function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): string | null {
   if (plan.activationUnreadable) {
     return copy(language, "recommendations.unreadable");
@@ -593,7 +661,7 @@ function purposeFor(agent: SpecialistId): string {
     case "multi-timeframe-analyst":
       return "Compare the working timeframe with the higher timeframe bias.";
     case "macro-news-analyst":
-      return "Summarize supplied macro context. It does not invent events.";
+      return "Read the economic calendar. It does not invent events.";
     case "risk-reviewer":
       return "Grade reward against stop distance.";
     case "research-agent":

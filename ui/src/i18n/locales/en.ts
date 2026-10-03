@@ -4787,6 +4787,8 @@ export const en: TranslationMap & {
       dataClosed: "Market closed",
       dataFailed: "Monitor failed",
       assessment: "Latest assessment",
+      calendar: "Economic calendar",
+      calendarUnknown: "The economic calendar has not been read yet.",
       chart: "Closed candles",
       chartEmpty: "No closed candles to draw.",
       chartUnavailable: "The candle feed is unavailable.",

@@ -1,3 +1,4 @@
+import { describeCalendarEvents, type EconomicEvent } from "./calendar.js";
 /**
  * Specialist analysts. Each one runs the deterministic detector for its job
  * and returns a structured result or an explicit failure. None of them echo
@@ -12,7 +13,9 @@ import {
   detectTrend,
   type Candle,
 } from "./candles.js";
+import { copy } from "./copy.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
+import type { OwnerLanguage } from "./owner.js";
 import { detectStructureEvents, latestStructureEvent } from "./structure.js";
 
 export const SPECIALISTS = [
@@ -193,6 +196,9 @@ export function runSpecialist(
     stopLoss?: number;
     targets?: number[];
     note?: string;
+    events?: EconomicEvent[];
+    calendarKnown?: boolean;
+    language?: OwnerLanguage;
   },
 ): SpecialistResult {
   switch (id) {
@@ -214,16 +220,25 @@ export function runSpecialist(
         stopLoss: input.stopLoss ?? Number.NaN,
         targets: input.targets ?? [],
       });
-    case "macro-news-analyst":
+    case "macro-news-analyst": {
+      const language = input.language ?? "en";
+      if (!input.calendarKnown) {
+        return {
+          agent: id,
+          ok: false,
+          summary: copy(language, "calendar.unavailable"),
+          data: { calendarKnown: false },
+          failure: "no_macro_context",
+        };
+      }
+      const events = input.events ?? [];
       return {
         agent: id,
-        ok: input.note != null && input.note.trim().length > 0,
-        summary:
-          input.note?.trim() ||
-          "No macro note was supplied. This agent does not invent a calendar event.",
-        data: { note: input.note ?? null },
-        failure: input.note?.trim() ? undefined : "no_macro_context",
+        ok: true,
+        summary: describeCalendarEvents(events, language),
+        data: { calendarKnown: true, count: events.length },
       };
+    }
     case "research-agent": {
       const scenario = input.note?.trim() ?? "";
       const bars = input.candles?.length ?? 0;

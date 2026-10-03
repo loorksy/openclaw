@@ -232,9 +232,9 @@ export default definePluginEntry({
     );
     tool(
       "lonora_calendar",
-      "Read the gold session clock.",
+      "Read gold-relevant economic events. A failed feed stays unknown and does not invent a quiet week.",
       Type.Object({}),
-      () => requireService().marketSnapshot().clock,
+      () => requireService().readCalendar(),
     );
     tool(
       "lonora_recommendations",
@@ -340,12 +340,23 @@ export default definePluginEntry({
         candles: Type.Optional(Type.Array(Type.Unknown())),
         note: Type.Optional(Text),
       }),
-      (params) =>
-        requireService().delegate({
-          agent: String(params.agent) as SpecialistId,
+      async (params) => {
+        const current = requireService();
+        const agent = String(params.agent) as SpecialistId;
+        if (agent === "macro-news-analyst") {
+          const calendar = await current.readCalendar();
+          return current.delegate({
+            agent,
+            events: calendar.events,
+            calendarKnown: calendar.ok,
+          });
+        }
+        return current.delegate({
+          agent,
           candles: params.candles as Candle[] | undefined,
           note: params.note as string | undefined,
-        }),
+        });
+      },
     );
     tool(
       "lonora_notify",

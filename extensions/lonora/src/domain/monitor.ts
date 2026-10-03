@@ -12,6 +12,8 @@ export interface Observation {
   structureEventKey: string | null;
   /** Latest closed-candle sweep. Absent on observations stored before sweeps. */
   sweepKey?: string | null;
+  /** Nearest high-impact calendar key. Absent on observations stored before the calendar. */
+  macroEventKey?: string | null;
   recommendationFingerprint: string;
 }
 
@@ -30,19 +32,28 @@ export function decideMonitorAction(
 ): MonitorDecision {
   if (!next.marketOpen) {
     const sessionChanged = previous != null && previous.session !== next.session;
+    const macro = macroAlert(previous, next);
+    const reasons = [
+      ...(sessionChanged ? ["session_transition_while_closed"] : []),
+      ...(macro ? ["macro_event"] : []),
+    ];
     return {
-      material: sessionChanged,
-      reasons: sessionChanged ? ["session_transition_while_closed"] : ["market_closed"],
-      deepAnalysis: false,
-      notificationKeys: sessionChanged ? [`session:${next.session}:closed`] : [],
+      material: reasons.length > 0,
+      reasons: reasons.length > 0 ? reasons : ["market_closed"],
+      deepAnalysis: macro,
+      notificationKeys: [
+        ...(sessionChanged ? [`session:${next.session}:closed`] : []),
+        ...(macro ? [`macro_event:${next.macroEventKey}`] : []),
+      ],
     };
   }
   if (!previous) {
+    const macro = macroAlert(null, next);
     return {
-      material: false,
-      reasons: ["baseline"],
-      deepAnalysis: false,
-      notificationKeys: [],
+      material: macro,
+      reasons: macro ? ["baseline", "macro_event"] : ["baseline"],
+      deepAnalysis: macro,
+      notificationKeys: macro ? [`macro_event:${next.macroEventKey}`] : [],
     };
   }
   const reasons: string[] = [];
@@ -78,6 +89,9 @@ export function decideMonitorAction(
   if (next.recommendationFingerprint !== previous.recommendationFingerprint) {
     reasons.push("recommendation_change");
   }
+  if (macroAlert(previous, next)) {
+    reasons.push("macro_event");
+  }
   const meaningful = reasons.some((reason) =>
     [
       "price_move",
@@ -86,23 +100,38 @@ export function decideMonitorAction(
       "structure_change",
       "recommendation_change",
       "liquidity_sweep",
+      "macro_event",
     ].includes(reason),
   );
   const deepAnalysis = reasons.some((reason) =>
-    ["structure_change", "recommendation_change", "volatility_change", "liquidity_sweep"].includes(
-      reason,
-    ),
+    [
+      "structure_change",
+      "recommendation_change",
+      "volatility_change",
+      "liquidity_sweep",
+      "macro_event",
+    ].includes(reason),
   );
   return {
     material: meaningful,
     reasons: reasons.length > 0 ? reasons : ["unchanged"],
     deepAnalysis,
     notificationKeys: meaningful
-      ? reasons.map(
-          (reason) => `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`,
+      ? reasons.map((reason) =>
+          reason === "macro_event"
+            ? `macro_event:${next.macroEventKey}`
+            : `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`,
         )
       : [],
   };
+}
+
+function macroAlert(previous: Observation | null, next: Observation): boolean {
+  const key = next.macroEventKey ?? null;
+  if (!key || key === "none") {
+    return false;
+  }
+  return key !== (previous?.macroEventKey ?? null);
 }
 
 export interface NoticeRecord {

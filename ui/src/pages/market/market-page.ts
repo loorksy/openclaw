@@ -22,6 +22,7 @@ type MarketSnapshot = {
   dataStatus?: string;
   dataError?: string | null;
   assessment?: string | null;
+  calendar?: { known: boolean; summary: string | null };
 };
 
 class MarketPage extends OpenClawLightDomElement {
@@ -165,6 +166,8 @@ class MarketPage extends OpenClawLightDomElement {
                   ${snapshot.dataError ? html`<p role="status">${snapshot.dataError}</p>` : nothing}
                   <dt>${t("lonora.market.assessment")}</dt>
                   <dd>${snapshot.assessment ?? snapshot.message}</dd>
+                  <dt>${t("lonora.market.calendar")}</dt>
+                  <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
                 </dl>
                 <h2>${t("lonora.market.chart")}</h2>
                 ${renderChart(this.candles, this.chartError)}

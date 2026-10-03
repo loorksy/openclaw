@@ -110,6 +110,27 @@ describe("structure", () => {
     expect(result.ok).toBe(false);
     expect(result.failure).toBe("insufficient_candles");
   });
+
+  it("does not invent a calendar event when the feed is unknown", () => {
+    const missing = runSpecialist("macro-news-analyst", { note: "CPI tomorrow" });
+    expect(missing.ok).toBe(false);
+    expect(missing.failure).toBe("no_macro_context");
+    expect(missing.summary).not.toContain("CPI");
+    const known = runSpecialist("macro-news-analyst", {
+      calendarKnown: true,
+      events: [
+        {
+          title: "CPI",
+          time: "2026-01-05T13:30:00.000Z",
+          impact: "high",
+          currency: "USD",
+        },
+      ],
+    });
+    expect(known.ok).toBe(true);
+    expect(known.summary).toContain("CPI");
+    expect(known.summary).toContain("USD");
+  });
 });
 
 describe("recommendations", () => {
@@ -256,6 +277,22 @@ describe("monitor", () => {
     expect(decision.deepAnalysis).toBe(false);
     expect(decision.reasons).not.toContain("price_move");
     expect(decision.reasons).not.toContain("liquidity_sweep");
+  });
+
+  it("treats a real high-impact event as material without a price move", () => {
+    const decision = decideMonitorAction(
+      { ...base, marketOpen: false, macroEventKey: "none" },
+      {
+        ...base,
+        marketOpen: false,
+        price: 9999,
+        macroEventKey: "USD:1:cpi",
+      },
+    );
+    expect(decision.reasons).toContain("macro_event");
+    expect(decision.reasons).not.toContain("price_move");
+    expect(decision.deepAnalysis).toBe(true);
+    expect(decision.notificationKeys).toEqual(["macro_event:USD:1:cpi"]);
   });
 
   it("suppresses a delivered notice until cooldown ends", () => {
@@ -419,6 +456,12 @@ describe("responsibilities, memory, usage", () => {
       tz: "America/New_York",
     });
     expect(cronForResponsibility("Watch structure")).toBeNull();
+  });
+
+  it("matches a calendar instruction when a high-impact event is near", () => {
+    expect(
+      checkResponsibility("Watch the economic calendar.", { reasons: ["macro_event"] }, false),
+    ).toEqual({ matched: ["macro_event"], waiting: false, closed: false });
   });
 
   it("matches a structure instruction only when structure changes", () => {
@@ -734,6 +777,44 @@ describe("market data", () => {
     expect(result.dataStatus).toBe("closed");
     expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
     expect(service.marketSnapshot(closedAt).invented).toBe(false);
+    expect(service.marketSnapshot(closedAt).calendar).toMatchObject({ known: false });
+    store.close();
+  });
+
+  it("runs the macro analyst from a real calendar event and ignores a closed-market price", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    store.saveObservation({
+      candleTime: 1,
+      price: 2300,
+      session: "newyork",
+      marketOpen: false,
+      atr: 1,
+      structureEventKey: null,
+      macroEventKey: "none",
+      recommendationFingerprint: "",
+    });
+    service.readCalendar = async () => ({
+      ok: true,
+      events: [
+        {
+          title: "CPI",
+          time: new Date(closedAt + 30 * 60_000).toISOString(),
+          impact: "high" as const,
+          currency: "USD",
+        },
+      ],
+      invented: false,
+      stale: false,
+      summary: "High: CPI (USD).",
+    });
+    const result = await service.monitorOnce(closedAt);
+    expect(result.decision.reasons).toContain("macro_event");
+    expect(result.decision.reasons).not.toContain("price_move");
+    expect(service.marketSnapshot(closedAt).lastPrice).toBe(2300);
+    expect(service.marketSnapshot(closedAt).assessment).toContain("CPI");
+    expect(store.listAgentRuns()[0]).toMatchObject({ agent: "macro-news-analyst", status: "ok" });
     store.close();
   });
 
@@ -916,6 +997,8 @@ describe("manual execution", () => {
     };
     const first = service.startMonitor(openAt);
     const second = service.startMonitor(openAt);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(reads).toBe(1);
     release();
     await first;

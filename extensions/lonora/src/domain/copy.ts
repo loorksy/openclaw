@@ -23,6 +23,8 @@ const COPY = {
     "trade.blocked": "Lonora will not place that trade. Only you can confirm an order.",
     "recommendations.unreadable":
       "The stored activation rule could not be read, so this plan will not fill.",
+    "calendar.empty": "No gold-relevant high or medium events are on the calendar in this window.",
+    "calendar.unavailable": "No economic calendar is available. Lonora will not invent an event.",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -44,6 +46,8 @@ const COPY = {
     "tasks.scheduleRejected": "المجدول لم يقبل الإحاطة. المراقبة ستستمر في فحصها.",
     "trade.blocked": "لونورا لن تنفّذ هذه الصفقة. التأكيد اليدوي لك وحدك.",
     "recommendations.unreadable": "تعذر قراءة شرط التفعيل المخزّن، لذلك لن تُملأ هذه الخطة.",
+    "calendar.empty": "لا أحداث عالية أو متوسطة ذات صلة بالذهب في هذه النافذة.",
+    "calendar.unavailable": "التقويم الاقتصادي غير متاح. لن تخترع لونورا حدثاً.",
   },
 } as const;
 
