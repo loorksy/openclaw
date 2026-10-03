@@ -474,6 +474,9 @@ function namedPatternLabel(kind: string) {
   if (kind === "inverse_cup_and_handle") {
     return t("lonora.market.patternInverseCup");
   }
+  if (kind === "rectangle") {
+    return t("lonora.market.patternRectangle");
+  }
   return "";
 }
 

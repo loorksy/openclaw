@@ -58,7 +58,8 @@ export interface NamedExtreme {
     | "flag"
     | "pennant"
     | "cup_and_handle"
-    | "inverse_cup_and_handle";
+    | "inverse_cup_and_handle"
+    | "rectangle";
   stage: PatternStage;
   neckline: number;
   extreme: number;
@@ -102,6 +103,9 @@ const RIM_TOLERANCE_ATR = 0.6;
 const MIN_CUP_DEPTH_ATR = 1.5;
 const MAX_CUP_DEPTH_ATR = 12;
 const MAX_HANDLE_RETRACE = 0.5;
+const RECTANGLE_TOLERANCE_ATR = 0.35;
+const MIN_RECTANGLE_HEIGHT_ATR = 1.2;
+const MIN_RECTANGLE_SPAN = 12;
 
 export function classifySwingRange(candles: Candle[]): SwingRangePattern {
   return {
@@ -111,6 +115,7 @@ export function classifySwingRange(candles: Candle[]): SwingRangePattern {
       classifyCup(candles) ??
       classifyTriangle(candles) ??
       classifyTripleExtreme(candles) ??
+      classifyRectangle(candles) ??
       classifyDoubleExtreme(candles) ??
       classifyFlag(candles),
   };
@@ -261,6 +266,8 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
       return copy(language, "pattern.cup");
     case "inverse_cup_and_handle":
       return copy(language, "pattern.inverseCup");
+    case "rectangle":
+      return copy(language, "pattern.rectangle");
   }
 }
 
@@ -363,6 +370,90 @@ function scanTriple(
     };
   }
   return null;
+}
+
+function classifyRectangle(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const recent = swingsWithIndex(candles).slice(-8);
+  const highs = recent.filter((swing) => swing.type === "high");
+  const lows = recent.filter((swing) => swing.type === "low");
+  if (highs.length < 2 || lows.length < 2) {
+    return null;
+  }
+  const top = median(highs.map((swing) => swing.price));
+  const bottom = median(lows.map((swing) => swing.price));
+  const height = top - bottom;
+  if (!(height >= MIN_RECTANGLE_HEIGHT_ATR * atr)) {
+    return null;
+  }
+  const tolerance = RECTANGLE_TOLERANCE_ATR * atr;
+  if (highs.some((swing) => Math.abs(swing.price - top) > tolerance)) {
+    return null;
+  }
+  if (lows.some((swing) => Math.abs(swing.price - bottom) > tolerance)) {
+    return null;
+  }
+  const anchors = [...recent].sort((left, right) => left.index - right.index);
+  const first = anchors[0];
+  const last = anchors.at(-1);
+  if (!first || !last || last.index - first.index < MIN_RECTANGLE_SPAN) {
+    return null;
+  }
+  const up = firstCloseBeyond(candles, last.index, top, "up", atr);
+  const down = firstCloseBeyond(candles, last.index, bottom, "down", atr);
+  const failed = up.breakIndex != null && down.breakIndex != null;
+  const brokeUp =
+    up.breakIndex != null && (down.breakIndex == null || up.breakIndex <= down.breakIndex);
+  const breakIndex = failed
+    ? Math.min(
+        up.breakIndex ?? Number.POSITIVE_INFINITY,
+        down.breakIndex ?? Number.POSITIVE_INFINITY,
+      )
+    : (up.breakIndex ?? down.breakIndex);
+  const neckline = breakIndex == null ? top : brokeUp ? top : bottom;
+  const extreme = neckline === top ? bottom : top;
+  let stage: PatternStage;
+  if (failed) {
+    stage = "failed";
+  } else if (breakIndex != null) {
+    const confirmed = candles
+      .slice(breakIndex + 1)
+      .some((candle) => Math.abs(candle.close - neckline) > atr * CONFIRMATION_ATR);
+    stage = confirmed ? "confirmed" : "completed_unconfirmed";
+  } else {
+    const lastClose = candles.at(-1)?.close;
+    const distanceAtr =
+      lastClose == null
+        ? 2
+        : Math.min(Math.abs(lastClose - top), Math.abs(lastClose - bottom)) / atr;
+    const proximity = Math.max(0, Math.min(1, 1 - distanceAtr / 2));
+    const ratio = Math.max(0.45, proximity * 0.9);
+    stage = ratio < 0.75 ? "forming" : "near_completion";
+  }
+  return {
+    kind: "rectangle",
+    stage,
+    neckline,
+    extreme,
+    inventedTarget: false,
+  };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  const mid = Math.floor(sorted.length / 2);
+  const lower = sorted[mid - 1];
+  const upper = sorted[mid];
+  if (upper == null) {
+    return 0;
+  }
+  return sorted.length % 2 === 1 || lower == null ? upper : (lower + upper) / 2;
 }
 
 function classifyDoubleExtreme(candles: Candle[]): NamedExtreme | null {

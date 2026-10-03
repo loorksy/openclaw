@@ -63,6 +63,7 @@ const enLonora = {
       patternPennant: "Pennant",
       patternCup: "Cup and handle",
       patternInverseCup: "Inverse cup and handle",
+      patternRectangle: "Rectangle",
       candle: "Candle",
       candleUnknown: "No named candle on the latest close.",
       candleNotATrade: "This names the closed candle. It is not a trade.",

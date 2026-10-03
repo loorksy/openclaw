@@ -169,6 +169,59 @@ describe("swing range stage", () => {
     expect(failed.named?.inventedTarget).toBe(false);
   });
 
+  it("names a rectangle when a close leaves either flat side", () => {
+    const candles = flatRectangle();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "rectangle",
+      stage: "forming",
+      neckline: 112,
+      extreme: 100,
+      inventedTarget: false,
+    });
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Rectangle");
+    expect(describePattern(forming, "ar")).toContain("مستطيل");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 120, 104.6, 105)]);
+    expect(wicked.named?.kind).toBe("rectangle");
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completedUp = classifySwingRange([...candles, bar(candles.length, 118, 104.6, 116)]);
+    expect(completedUp.named).toMatchObject({
+      kind: "rectangle",
+      stage: "completed_unconfirmed",
+      neckline: 112,
+      inventedTarget: false,
+    });
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 118, 104.6, 116),
+      bar(candles.length + 1, 120, 104.6, 118),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+
+    const completedDown = classifySwingRange([...candles, bar(candles.length, 105.4, 96, 98)]);
+    expect(completedDown.named).toMatchObject({
+      kind: "rectangle",
+      stage: "completed_unconfirmed",
+      neckline: 100,
+      inventedTarget: false,
+    });
+
+    const failed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 118, 104.6, 116),
+      bar(candles.length + 1, 105.4, 94, 98),
+    ]);
+    expect(failed.named?.kind).toBe("rectangle");
+    expect(failed.named?.stage).toBe("failed");
+    expect(failed.named?.inventedTarget).toBe(false);
+  });
+
   it("names a head and shoulders only after a close through the neckline", () => {
     const candles = headAndShoulders();
     const forming = classifySwingRange(candles);
@@ -453,6 +506,27 @@ function ascendingTriangle(): Candle[] {
   trough(28, 103);
   peak(34);
   trough(40, 106);
+  return candles;
+}
+
+function flatRectangle(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 105.4, 104.6, 105));
+  const high = (index: number, price: number) => {
+    candles[index] = bar(index, price, 104.6, 105);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, price - 2, 104.6, 105);
+    }
+  };
+  const low = (index: number, price: number) => {
+    candles[index] = bar(index, 105.4, price, 105);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 105.4, Math.min(price + 1.2, 104.4), 105);
+    }
+  };
+  high(8, 112);
+  low(14, 100);
+  high(20, 112);
+  low(26, 100);
   return candles;
 }
 
