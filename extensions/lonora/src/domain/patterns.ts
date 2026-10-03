@@ -38,7 +38,7 @@ export interface SwingRangePattern {
   breakLevel: number | null;
   completionRatio: number;
   inventedTarget: false;
-  /** A double top or double bottom when the swings qualify. Never a projected target. */
+  /** A named swing extreme when the swings qualify. Never a projected target. */
   named: NamedExtreme | null;
 }
 
@@ -46,6 +46,8 @@ export interface NamedExtreme {
   kind:
     | "double_top"
     | "double_bottom"
+    | "triple_top"
+    | "triple_bottom"
     | "head_and_shoulders"
     | "inverse_head_and_shoulders"
     | "ascending_triangle"
@@ -77,6 +79,9 @@ const UNCLASSIFIED: SwingRangePattern = {
 const MAX_EXTREME_GAP_ATR = 0.4;
 const MIN_BAR_SEPARATION = 8;
 const MIN_HEIGHT_ATR = 0.5;
+const MAX_TRIPLE_GAP_ATR = 0.5;
+const MIN_TRIPLE_BAR_SEPARATION = 6;
+const MIN_TRIPLE_HEIGHT_ATR = 0.6;
 const MIN_HEAD_PROMINENCE_ATR = 1.2;
 const MAX_SHOULDER_ASYMMETRY = 0.25;
 const MIN_TRIANGLE_BARS = 40;
@@ -105,6 +110,7 @@ export function classifySwingRange(candles: Candle[]): SwingRangePattern {
       classifyHeadShoulders(candles) ??
       classifyCup(candles) ??
       classifyTriangle(candles) ??
+      classifyTripleExtreme(candles) ??
       classifyDoubleExtreme(candles) ??
       classifyFlag(candles),
   };
@@ -229,6 +235,10 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
       return copy(language, "pattern.doubleTop");
     case "double_bottom":
       return copy(language, "pattern.doubleBottom");
+    case "triple_top":
+      return copy(language, "pattern.tripleTop");
+    case "triple_bottom":
+      return copy(language, "pattern.tripleBottom");
     case "head_and_shoulders":
       return copy(language, "pattern.headShoulders");
     case "inverse_head_and_shoulders":
@@ -252,6 +262,107 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
     case "inverse_cup_and_handle":
       return copy(language, "pattern.inverseCup");
   }
+}
+
+function classifyTripleExtreme(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const swings = swingsWithIndex(candles);
+  const top = scanTriple(candles, swings, atr, "top");
+  const bottom = scanTriple(candles, swings, atr, "bottom");
+  if (top && bottom) {
+    return top.thirdIndex >= bottom.thirdIndex ? top.named : bottom.named;
+  }
+  return top?.named ?? bottom?.named ?? null;
+}
+
+function scanTriple(
+  candles: readonly Candle[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+  variant: "top" | "bottom",
+): { named: NamedExtreme; thirdIndex: number } | null {
+  const extremeKind = variant === "top" ? "high" : "low";
+  for (let end = swings.length - 1; end >= 4; end -= 1) {
+    const third = swings[end]!;
+    const counter2 = swings[end - 1]!;
+    const second = swings[end - 2]!;
+    const counter1 = swings[end - 3]!;
+    const first = swings[end - 4]!;
+    if (
+      first.type !== extremeKind ||
+      second.type !== extremeKind ||
+      third.type !== extremeKind ||
+      counter1.type === extremeKind ||
+      counter2.type === extremeKind
+    ) {
+      continue;
+    }
+    if (second.index - first.index < MIN_TRIPLE_BAR_SEPARATION) {
+      continue;
+    }
+    if (third.index - second.index < MIN_TRIPLE_BAR_SEPARATION) {
+      continue;
+    }
+    const prices = [first.price, second.price, third.price];
+    const extreme = variant === "top" ? Math.max(...prices) : Math.min(...prices);
+    const spread = Math.max(...prices) - Math.min(...prices);
+    if (spread > MAX_TRIPLE_GAP_ATR * atr) {
+      continue;
+    }
+    // Farther pullback. The shallower one must not complete the pattern.
+    const neckline =
+      variant === "top"
+        ? Math.min(counter1.price, counter2.price)
+        : Math.max(counter1.price, counter2.price);
+    if (!(Math.abs(extreme - neckline) > atr * MIN_TRIPLE_HEIGHT_ATR)) {
+      continue;
+    }
+    const breakDirection = variant === "top" ? "down" : "up";
+    const completion = firstCloseBeyond(candles, third.index, neckline, breakDirection, atr);
+    const invalidation = firstCloseBeyond(
+      candles,
+      third.index,
+      extreme,
+      variant === "top" ? "up" : "down",
+      atr,
+    );
+    const invalidatedFirst =
+      invalidation.breakIndex != null &&
+      (completion.breakIndex == null || invalidation.breakIndex < completion.breakIndex);
+    const completed = completion.breakIndex != null && !invalidatedFirst;
+    let stage: PatternStage;
+    if (invalidatedFirst) {
+      stage = "failed";
+    } else if (completed && completion.breakIndex != null) {
+      const confirmed = candles
+        .slice(completion.breakIndex + 1)
+        .some((candle) => Math.abs(candle.close - neckline) > atr * CONFIRMATION_ATR);
+      stage = confirmed ? "confirmed" : "completed_unconfirmed";
+    } else {
+      const lastClose = candles.at(-1)?.close;
+      const distanceAtr = lastClose == null ? 2 : Math.abs(lastClose - neckline) / atr;
+      const proximity = Math.max(0, Math.min(1, 1 - distanceAtr / 2));
+      const ratio = Math.max(0.45, proximity * 0.9);
+      stage = ratio < 0.75 ? "forming" : "near_completion";
+    }
+    return {
+      thirdIndex: third.index,
+      named: {
+        kind: variant === "top" ? "triple_top" : "triple_bottom",
+        stage,
+        neckline,
+        extreme,
+        inventedTarget: false,
+      },
+    };
+  }
+  return null;
 }
 
 function classifyDoubleExtreme(candles: Candle[]): NamedExtreme | null {

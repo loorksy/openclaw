@@ -132,6 +132,43 @@ describe("swing range stage", () => {
     expect(failed.named?.inventedTarget).toBe(false);
   });
 
+  it("names a triple top from the farther pullback and does not call it a double", () => {
+    const candles = tripleTop();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "triple_top",
+      stage: "forming",
+      neckline: 100,
+      extreme: 110.2,
+      inventedTarget: false,
+    });
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Triple top");
+    expect(describePattern(forming, "ar")).toContain("قمة ثلاثية");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured|double/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 104.4, 90, 103)]);
+    expect(wicked.named?.kind).toBe("triple_top");
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 104.4, 96, 98)]);
+    expect(completed.named?.stage).toBe("completed_unconfirmed");
+    expect(completed.named?.inventedTarget).toBe(false);
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 104.4, 96, 98),
+      bar(candles.length + 1, 104.4, 94, 96),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 114, 103, 113)]);
+    expect(failed.named?.kind).toBe("triple_top");
+    expect(failed.named?.stage).toBe("failed");
+    expect(failed.named?.inventedTarget).toBe(false);
+  });
+
   it("names a head and shoulders only after a close through the neckline", () => {
     const candles = headAndShoulders();
     const forming = classifySwingRange(candles);
@@ -416,6 +453,28 @@ function ascendingTriangle(): Candle[] {
   trough(28, 103);
   peak(34);
   trough(40, 106);
+  return candles;
+}
+
+function tripleTop(): Candle[] {
+  const candles = Array.from({ length: 36 }, (_, index) => bar(index, 104.5, 103.5, 104));
+  const high = (index: number, price: number) => {
+    candles[index] = bar(index, price, 103.5, 105);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 106, 103.5, 104);
+    }
+  };
+  const trough = (index: number, price: number) => {
+    candles[index] = bar(index, 104.2, price, 102);
+    for (const offset of [-2, -1, 1, 2]) {
+      candles[index + offset] = bar(index + offset, 105, Math.min(price + 1.2, 103.2), 104);
+    }
+  };
+  high(8, 110);
+  trough(14, 100);
+  high(20, 110.2);
+  trough(26, 102);
+  high(32, 110.1);
   return candles;
 }
 

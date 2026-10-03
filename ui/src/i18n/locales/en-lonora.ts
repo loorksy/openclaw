@@ -50,6 +50,8 @@ const enLonora = {
       patternFailed: "The swing range failed.",
       patternDoubleTop: "Double top",
       patternDoubleBottom: "Double bottom",
+      patternTripleTop: "Triple top",
+      patternTripleBottom: "Triple bottom",
       patternHeadShoulders: "Head and shoulders",
       patternInverseHeadShoulders: "Inverse head and shoulders",
       patternAscending: "Ascending triangle",
