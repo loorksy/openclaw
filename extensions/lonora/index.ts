@@ -444,6 +444,11 @@ export default definePluginEntry({
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(
+      "lonora.calendar.read",
+      handle(() => requireService().readCalendar()),
+      { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
       "lonora.recommendations.list",
       handle(() => requireService().listRecommendations()),
       { scope: "operator.read" },

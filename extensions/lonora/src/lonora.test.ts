@@ -399,6 +399,29 @@ describe("structure", () => {
     expect(result.failure).toBe("insufficient_candles");
   });
 
+  it("reads the market calendar without turning a missing feed into a quiet week", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const now = Date.UTC(2026, 0, 14, 15, 0);
+    expect(service.marketSnapshot(now).calendar).toEqual({ known: false, summary: null });
+    const read = await service.readCalendar(now);
+    expect(read.ok).toBe(false);
+    expect(read.invented).toBe(false);
+    expect(read.events).toEqual([]);
+    expect(read.summary).toBe(copy("en", "calendar.unavailable"));
+    expect(read.summary).not.toMatch(/quiet/i);
+    expect(service.marketSnapshot(now).calendar).toEqual({
+      known: false,
+      summary: copy("en", "calendar.unavailable"),
+    });
+    store.setLanguage("ar");
+    const arabic = await service.readCalendar(now);
+    expect(arabic.summary).toBe(copy("ar", "calendar.unavailable"));
+    expect(arabic.summary).toContain("التقويم الاقتصادي غير متاح");
+    expect(arabic.summary).not.toContain("not available");
+    store.close();
+  });
+
   it("does not invent a calendar event when the feed is unknown", () => {
     const missing = runSpecialist("macro-news-analyst", { note: "CPI tomorrow" });
     expect(missing.ok).toBe(false);

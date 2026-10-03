@@ -58,6 +58,7 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
+  @state() private calendarText: string | null = null;
   @state() private memoryText: string | null = null;
   @state() private historyText: string | null = null;
   @state() private comparing = false;
@@ -123,6 +124,7 @@ class MarketPage extends OpenClawLightDomElement {
       await Promise.all([
         this.loadCandles(generation),
         this.loadHeadlines(generation),
+        this.loadCalendar(generation),
         this.loadMemory(generation),
       ]);
     } catch (error) {
@@ -156,6 +158,33 @@ class MarketPage extends OpenClawLightDomElement {
     } catch {
       if (generation === this.loadGeneration) {
         this.memoryText = null;
+      }
+    }
+  }
+
+  private async loadCalendar(generation: number) {
+    const target = lonoraRequestTarget(this.context, "lonora.calendar.read");
+    if (!target.ok) {
+      this.calendarText = null;
+      return;
+    }
+    try {
+      const read = await target.client.request<{
+        ok: boolean;
+        summary?: string;
+        invented?: boolean;
+      }>("lonora.calendar.read", {});
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      if (read.invented) {
+        this.calendarText = null;
+        return;
+      }
+      this.calendarText = read.summary ?? t("lonora.market.calendarUnknown");
+    } catch {
+      if (generation === this.loadGeneration) {
+        this.calendarText = null;
       }
     }
   }
@@ -345,7 +374,13 @@ class MarketPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.market.assessment")}</dt>
                   <dd>${snapshot.assessment ?? t("lonora.market.chartUnavailable")}</dd>
                   <dt>${t("lonora.market.calendar")}</dt>
-                  <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
+                  <dd>
+                    ${
+                      this.calendarText ??
+                      snapshot.calendar?.summary ??
+                      t("lonora.market.calendarUnknown")
+                    }
+                  </dd>
                   <dt>${t("lonora.market.memory")}</dt>
                   <dd>${this.memoryText ?? t("lonora.market.memoryUnknown")}</dd>
                   <dt>${t("lonora.market.headlines")}</dt>
