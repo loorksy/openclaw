@@ -23,7 +23,7 @@ import {
 } from "./domain/responsibilities.js";
 import { dailyBudgetAllows, estimateCostUsd, rollupUsage, usageIdentity } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
-import { LONORA_TOOL_ALLOW } from "./policy.js";
+import { LONORA_SYSTEM_CONTEXT, LONORA_TOOL_ALLOW } from "./policy.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
 
@@ -1034,6 +1034,10 @@ describe("responsibilities, memory, usage", () => {
     expect(empty.ownerBrief()).toContain("New York continuation");
     expect(empty.ownerBrief()).toContain("Plan grade: First target is 4.45R.");
     expect(empty.ownerBrief().length).toBeLessThanOrEqual(700);
+    expect(empty.promptContext()).toContain(LONORA_SYSTEM_CONTEXT);
+    expect(empty.promptContext()).toContain(copy("en", "prompt.reply"));
+    expect(empty.promptContext()).toContain(empty.ownerBrief());
+    expect(empty.ownerBrief()).not.toContain(copy("en", "prompt.reply"));
     expect(empty.agentsView().find((agent) => agent.agent === "memory-curator")?.lastResult).toBe(
       copy("en", "memory.stored"),
     );
@@ -1046,6 +1050,10 @@ describe("responsibilities, memory, usage", () => {
     expect(empty.ownerBrief()).toContain("درجة الخطة: الهدف الأول 4.45R.");
     expect(empty.ownerBrief()).toContain("السبريد لم يُقرأ");
     expect(empty.ownerBrief()).toContain("آخر طلب: Next");
+    expect(empty.promptContext()).toContain(copy("ar", "prompt.reply"));
+    expect(empty.promptContext()).not.toContain(copy("en", "prompt.reply"));
+    expect(empty.ownerBrief()).not.toContain(copy("ar", "prompt.reply"));
+    expect(empty.ownerBrief().length).toBeLessThanOrEqual(700);
     empty.store.close();
     second.store.close();
   });

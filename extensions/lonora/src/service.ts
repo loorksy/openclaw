@@ -82,6 +82,7 @@ import {
   rollupUsage,
   type UsageEvent,
 } from "./domain/usage.js";
+import { LONORA_SYSTEM_CONTEXT } from "./policy.js";
 import { LonoraStore, type MemoryKind, type ResponsibilityRow } from "./store.js";
 
 const DELEGATION_WINDOW_MS = 60_000;
@@ -1226,6 +1227,11 @@ export class LonoraService {
     };
     this.store.addUsage(event);
     return event;
+  }
+
+  promptContext(now = Date.now()): string {
+    const language = this.store.ensureLocalOwner().language;
+    return `${LONORA_SYSTEM_CONTEXT}\n${copy(language, "prompt.reply")}\n${this.ownerBrief(now)}`;
   }
 
   usageSummary(now = Date.now()) {
