@@ -1,6 +1,6 @@
 import { consume } from "@lit/context";
 import { html } from "lit";
-import { state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import type {
   ChannelsPairingListResult,
   ChannelsPairingRequest,
@@ -54,6 +54,8 @@ function formatNostrProfileOperationError(error: unknown, prefix: string): strin
 }
 
 class ChannelsPage extends OpenClawLightDomElement {
+  @property({ type: Boolean }) ownerChannelsOnly = false;
+
   @consume({ context: applicationContext, subscribe: true })
   private context!: ApplicationContext;
 
@@ -604,6 +606,7 @@ class ChannelsPage extends OpenClawLightDomElement {
           pairingNotice: this.pairingNotice,
           canManagePairing,
           canAdmin,
+          ownerChannelKeys: this.ownerChannelsOnly ? ["telegram"] : undefined,
           showAdvancedSettings: loadSettings().showAdvancedSettings === true,
           nostrProfileFormState: this.nostrProfileFormState,
           nostrProfileAccountId: this.nostrProfileAccountId,

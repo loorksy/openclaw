@@ -127,14 +127,18 @@ const enCommandPalette = {
   },
   chat: {
     welcome: {
+      watchPrompt: "What should I watch for you?",
       hintBeforeShortcut: "Type a message below ·",
       hintAfterShortcut: "for commands",
       recentSessions: "Recent chats",
       suggestions: {
         whatCanYouDo: en.chat.welcome.suggestions.whatCanYouDo,
-        summarizeRecentSessions: "Summarize my recent sessions",
-        configureChannel: "Help me configure a channel",
-        checkSystemHealth: "Check system health",
+        analyzeGold: "Analyze gold now",
+        monitorStructure: "Monitor XAUUSD and alert me if structure changes",
+        reviewRecommendations: "Review my active recommendations",
+        nyBriefing: "Prepare the New York session briefing",
+        reviewRisk: "Review today's market risk",
+        researchHistory: "Research similar historical setups",
       },
     },
     commands: {

@@ -51,7 +51,10 @@ const RECOMMENDED_CHANNEL_ORDER: ChannelKey[] = [
 ];
 
 export function renderChannels(props: ChannelsProps) {
-  const channelOrder = resolveChannelOrder(props.channels.channelsSnapshot);
+  const allowed = props.ownerChannelKeys ? new Set(props.ownerChannelKeys) : null;
+  const channelOrder = resolveChannelOrder(props.channels.channelsSnapshot).filter((key) =>
+    allowed ? allowed.has(key) : true,
+  );
   // Key both lists so status updates cannot retarget an in-flight channel click.
   const connected = channelOrder.filter((key) => channelEnabled(key, props));
   const available = channelOrder.filter((key) => !channelEnabled(key, props));

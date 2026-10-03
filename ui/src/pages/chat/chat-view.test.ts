@@ -3788,7 +3788,7 @@ describe("chat welcome", () => {
     const container = renderWelcome({ assistantAvatar: "VC", assistantAvatarUrl: null });
 
     expect(container.querySelector(".agent-chat__suggestion")?.textContent?.trim()).toBe(
-      t("chat.welcome.suggestions.whatCanYouDo"),
+      t("chat.welcome.suggestions.analyzeGold"),
     );
   });
 });

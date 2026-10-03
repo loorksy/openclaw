@@ -653,7 +653,11 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       updatedAt: data.updatedAt,
       costDays: MODEL_PROVIDERS_COST_DAYS,
       credentialAgentLabel: selected ? normalizeAgentLabel(selected) : this.selectedAgentId,
-      cards: noSelectableAgents ? [] : this.installedAgents.filterProviders(cards),
+      cards: noSelectableAgents
+        ? []
+        : this.installedAgents.filterProviders(cards).filter((card) =>
+            ["anthropic", "openai", "zai", "openrouter"].includes(card.id),
+          ),
       configuredModels,
       decisionModels: catalog?.decisionModels ?? [],
       defaultModels: defaults,

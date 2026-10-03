@@ -39,6 +39,8 @@ type AgentRoutePath = {
 const APP_ROUTE_DEFINITIONS = {
   settings: { path: "/settings" },
   chat: { path: "/chat" },
+  market: { path: "/market" },
+  recommendations: { path: "/recommendations" },
   terminal: { path: "/terminal" },
   dashboard: { path: "/dashboard" },
   dashboards: { path: "/dashboards" },

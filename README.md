@@ -1,27 +1,18 @@
-# OpenClaw 🦞 — Your assistant, on your devices, in your chats
+# Lonora
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/openclaw/openclaw/main/docs/assets/openclaw-banner-light.png">
-    <img src="https://raw.githubusercontent.com/openclaw/openclaw/main/docs/assets/openclaw-banner-dark.png" alt="OpenClaw — EXFOLIATE! EXFOLIATE! Your AI assistant, running on your own devices.">
-  </picture>
-</p>
+Lonora is a private, always-on market operator for one owner. It watches XAUUSD, keeps recommendations, and accepts ongoing responsibilities. Web and Telegram are two doors into the same owner, memory, and task list.
 
-<p align="center">
-  <a href="https://github.com/openclaw/openclaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/openclaw/openclaw/ci.yml?branch=main&style=flat-square&label=ci" alt="CI status"></a>
-  <a href="https://www.npmjs.com/package/openclaw"><img src="https://img.shields.io/npm/v/openclaw?style=flat-square&label=npm" alt="npm version"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/openclaw?style=flat-square" alt="Node.js version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <a href="https://discord.gg/clawd"><img src="https://img.shields.io/discord/1456350064065904867?label=discord&logo=discord&logoColor=white&color=5865F2&style=flat-square" alt="Discord"></a>
-</p>
+The owner workspace is Chat, Market, Recommendations, Tasks, Agents, Skills, Usage & Cost, and Settings. Settings exposes Anthropic, OpenAI, Z.AI, and OpenRouter. Lonora does not place a trade from a monitor, a schedule, or a specialist.
 
-OpenClaw is an open-source AI assistant that runs on your own computer and meets you in the channels you already use: Discord, iMessage, Slack, Teams, Telegram, WhatsApp, and 20+ more, plus native apps for macOS, iOS, Android, Windows, and Linux. One Gateway runs it as a personal assistant on a laptop or as a shared [team deployment](https://docs.openclaw.ai/start/teams); configuration is the only difference.
+Architecture, the OpenClaw keep/hide/adapt map, and upstream security merges: [docs/lonora/ARCHITECTURE.md](docs/lonora/ARCHITECTURE.md) and [docs/lonora/UPSTREAM.md](docs/lonora/UPSTREAM.md).
 
-**Yours, with no catch.** State, memory, and credentials live on your hardware. Models and agent harnesses (Claude, Codex, local models) are plugins you can swap without changing anything else. Your prompts go to the model provider and chat platforms you configure, plus any diagnostics export you enable yourself; by default OpenClaw itself phones home for nothing but a daily version check, anonymous feature statistics are opt-in, and `update.checkOnStart: false` disables both ([what OpenClaw sends](https://docs.openclaw.ai/gateway/telemetry)). OpenClaw is stewarded by the [OpenClaw Foundation](https://openclaw.org), an independent 501(c)(3), and has no paid tier, hosted service, or token. The architecture case — trusted gateway, untrusted execution, deterministic policy — is in [Why OpenClaw](https://docs.openclaw.ai/start/why-openclaw).
-
-[Website](https://openclaw.ai) · [Docs](https://docs.openclaw.ai) · [Getting started](https://docs.openclaw.ai/start/getting-started) · [Why OpenClaw](https://docs.openclaw.ai/start/why-openclaw) · [FAQ](https://docs.openclaw.ai/help/faq) · [Vision](VISION.md) · [DeepWiki](https://deepwiki.com/openclaw/openclaw)
+This repository is a fork of OpenClaw. The Gateway, sessions, scheduler, plugin tools, and Telegram channel stay as the runtime. The MIT license in `LICENSE` is unchanged.
 
 ## Install
+
+Developer and deployment commands below are the runtime toolchain. They are not a Lonora user-facing CLI.
+
+## Runtime install
 
 The installer supports macOS, Linux, and Windows. It provisions a supported Node.js runtime when needed.
 

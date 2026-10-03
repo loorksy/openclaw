@@ -19,17 +19,13 @@ type NavigationPresentation = readonly [icon: IconName, titleKey: string, subtit
 // Worktrees is a tab of the Sessions hub, so it is not listed either.
 // Workboard is plugin-owned and enters the zone through its Control UI descriptor.
 export const SIDEBAR_NAV_ROUTES = [
-  "agents-home",
-  "dashboards",
-  "usage",
+  "chat",
+  "market",
+  "recommendations",
   "cron",
-  "sessions",
-  "systems",
-  "activity",
-  "meetings",
-  "plugins",
-  "apps",
-  "portals",
+  "agents-home",
+  "skills",
+  "usage",
 ] as const satisfies readonly NavigationRouteId[];
 
 // Routes presented as tabs of the Plugins hub. The sidebar highlights the
@@ -59,7 +55,7 @@ export type SidebarZoneEntry =
 // Keep the highest-value operational destinations visible on first use. Users
 // can still replace this route set through the customize menu.
 export const DEFAULT_SIDEBAR_ENTRIES = (
-  ["agents-home", "dashboards", "systems", "cron", "plugins"] as const
+  ["chat", "market", "recommendations", "cron", "agents-home", "skills", "usage"] as const
 ).map((route) => serializeSidebarEntry({ type: "route", route }));
 
 /**
@@ -190,54 +186,20 @@ export function settingsSearchTextMatches(value: string, query: string): boolean
 // Management surfaces (sessions, worktrees, activity, memory import) are
 // workspace destinations, not settings; model setup is a subpage of Models.
 const SETTINGS_NAVIGATION_GROUPS = [
-  { labelKey: null, routes: ["custodian", "profile", "appearance", "notifications"] },
+  { labelKey: null, routes: ["profile", "appearance", "notifications"] },
   { labelKey: "nav.settingsGroupDevice", routes: ["device", "device-permissions"] },
-  {
-    labelKey: "nav.settingsGroupConnections",
-    routes: ["connection", "channels", "communications", "talk", "devices", "cloud-workers"],
-  },
-  {
-    labelKey: "nav.settingsGroupAgents",
-    routes: [
-      "agents",
-      "model-providers",
-      "search",
-      "plugin-settings",
-      "skill-settings",
-      "mcp",
-      "memory",
-      "automation",
-    ],
-  },
-  {
-    labelKey: "nav.settingsGroupSecurity",
-    routes: ["security", "secrets", "approvals"],
-  },
-  {
-    labelKey: "nav.settingsGroupSystem",
-    routes: ["infrastructure", "labs", "advanced", "debug", "logs", "updates", "about"],
-  },
+  { labelKey: "nav.settingsGroupConnections", routes: ["channels"] },
+  { labelKey: "nav.settingsGroupAgents", routes: ["model-providers"] },
+  { labelKey: "nav.settingsGroupSystem", routes: ["advanced"] },
 ] as const satisfies readonly SettingsNavigationGroup[];
 
 const NON_ADMIN_SETTINGS_ROUTES: ReadonlySet<NavigationRouteId> = new Set([
   "profile",
   "appearance",
   "notifications",
-  "connection",
   "channels",
-  "talk",
-  "devices",
-  "agents",
   "model-providers",
-  "search",
-  "plugin-settings",
-  "skill-settings",
-  "memory",
-  "approvals",
   "advanced",
-  "debug",
-  "logs",
-  "about",
 ]);
 
 export function isSettingsNavigationRouteVisible(
@@ -352,6 +314,8 @@ const NAVIGATION_PRESENTATION: Record<NavigationRouteId, NavigationPresentation>
   "device-permissions": navigationPresentation("shieldCheck", "devicePermissions"),
   devices: navigationPresentation("monitorSmartphone", "devices"),
   "cloud-workers": navigationPresentation("server", "cloudWorkers"),
+  market: navigationPresentation("activity", "market"),
+  recommendations: navigationPresentation("badgeCheck", "recommendations"),
   chat: navigationPresentation("messageSquare", "chat"),
   terminal: ["terminal", "terminal.title", "terminal.open"],
   dashboard: navigationPresentation("layoutDashboard", "chat"),
@@ -457,15 +421,15 @@ export function titleForRoute(routeId: NavigationRouteId): string {
 /** Window/tab title, markers leftmost because tabs truncate from the right.
  * A disconnected Gateway replaces the approval count (a stale queue is not
  * actionable); titles already ending in the brand
- * ("Ask OpenClaw") skip the suffix so it never reads "… OpenClaw — OpenClaw". */
+ * ("Lonora") skip the suffix so it never reads "… Lonora — Lonora". */
 export function formatDocumentTitle(options: {
   context: string;
   attentionCount?: number;
   gatewayDisconnected?: boolean;
 }): string {
-  const base = options.context.endsWith("OpenClaw")
+  const base = options.context.endsWith("Lonora")
     ? options.context
-    : `${options.context} — OpenClaw`;
+    : `${options.context} — Lonora`;
   if (options.gatewayDisconnected) {
     return `(${t("connection.disconnectedTitle")}) ${base}`;
   }

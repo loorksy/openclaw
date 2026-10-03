@@ -59,18 +59,6 @@ describe("sidebar entries", () => {
     );
     const browserGroups = visibleSettingsNavigationGroups(canAdmin);
     const nativeGroups = visibleSettingsNavigationGroups(canAdmin, capability);
-    expect(browserGroups.flatMap((group) => group.routes).includes("updates")).toBe(canAdmin);
-    expect(nativeGroups.flatMap((group) => group.routes)).toContain("updates");
-    expect(isSettingsNavigationRouteVisible("updates", canAdmin)).toBe(canAdmin);
-    expect(isSettingsNavigationRouteVisible("updates", canAdmin, capability)).toBe(true);
-    expect(search("Check for updates", capability)).toContainEqual(
-      expect.objectContaining({ routeId: "updates" }),
-    );
-    expect(
-      getStaticCommandPaletteCatalogItems(canAdmin, capability).some(
-        (item) => item.action === "nav:updates",
-      ),
-    ).toBe(true);
     expect(browserGroups.some((group) => group.labelKey === "nav.settingsGroupDevice")).toBe(false);
     expect(nativeGroups[1]).toEqual({
       labelKey: "nav.settingsGroupDevice",
@@ -113,8 +101,6 @@ describe("sidebar entries", () => {
       ["Apple Watch", "device"],
       ["Contacts", "device-permissions"],
       ["Photos", "device-permissions"],
-      ["Use speakerphone", "talk"],
-      ["Talk in the background", "talk"],
     ] as const) {
       expect(search(query, iosCapability)).toContainEqual(expect.objectContaining({ routeId }));
       expect(search(query, null)).toEqual([]);
@@ -158,11 +144,13 @@ describe("sidebar entries", () => {
   });
   it("keeps operational destinations visible by default", () => {
     expect(DEFAULT_SIDEBAR_ENTRIES).toEqual([
-      "route:agents-home",
-      "route:dashboards",
-      "route:systems",
+      "route:chat",
+      "route:market",
+      "route:recommendations",
       "route:cron",
-      "route:plugins",
+      "route:agents-home",
+      "route:skills",
+      "route:usage",
     ]);
     expect(isSettingsNavigationRoute("agents-home")).toBe(false);
   });
@@ -186,14 +174,9 @@ describe("sidebar entries", () => {
     expect(settingsRoutes.every((routeId) => isSettingsNavigationRoute(routeId))).toBe(true);
   });
 
-  it("places Updates in the System group immediately before About", () => {
+  it("keeps advanced settings as the only system entry", () => {
     const system = settingsGroups.find((group) => group.labelKey === "nav.settingsGroupSystem");
-    expect(system?.routes.slice(-2)).toEqual(["updates", "about"]);
-  });
-
-  it("places team secrets between Privacy & Security and Approvals", () => {
-    const security = settingsGroups.find((group) => group.labelKey === "nav.settingsGroupSecurity");
-    expect(security?.routes).toEqual(["security", "secrets", "approvals"]);
+    expect(system?.routes).toEqual(["advanced"]);
   });
 
   it("keeps model setup as a settings subpage without a sidebar entry", () => {
@@ -206,22 +189,19 @@ describe("sidebar entries", () => {
     expect(settingsNavigationOwnerRoute("ai-agents")).toBe("agents");
   });
 
-  it.each(["plugin-settings", "skill-settings"] as const)(
-    "keeps %s visible to admins and read-only operators",
-    (routeId) => {
-      expect(visibleSettingsNavigationGroups(true).flatMap((group) => group.routes)).toContain(
-        routeId,
-      );
-      expect(visibleSettingsNavigationGroups(false).flatMap((group) => group.routes)).toContain(
-        routeId,
-      );
-    },
-  );
+  it("keeps model providers visible to the owner and to read-only operators", () => {
+    expect(visibleSettingsNavigationGroups(true).flatMap((group) => group.routes)).toContain(
+      "model-providers",
+    );
+    expect(visibleSettingsNavigationGroups(false).flatMap((group) => group.routes)).toContain(
+      "model-providers",
+    );
+  });
 
   it("filters admin-only settings while preserving legacy fail-open visibility", () => {
     const nonAdminRoutes = visibleSettingsNavigationGroups(false).flatMap((group) => group.routes);
-    expect(nonAdminRoutes).toContain("approvals");
     expect(nonAdminRoutes).toContain("channels");
+    expect(nonAdminRoutes).toContain("model-providers");
     expect(nonAdminRoutes).not.toContain("security");
     expect(nonAdminRoutes).not.toContain("communications");
 
@@ -244,7 +224,7 @@ describe("sidebar entries", () => {
       type: "plugin",
       key: "workboard/board-ops",
     });
-    expect(serializeSidebarEntry({ type: "route", route: "plugins" })).toBe("route:plugins");
+    expect(serializeSidebarEntry({ type: "route", route: "skills" })).toBe("route:skills");
     expect(serializeSidebarEntry({ type: "session", key: "agent:main:test" })).toBe(
       "session:agent:main:test",
     );

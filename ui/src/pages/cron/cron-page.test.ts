@@ -49,7 +49,7 @@ describe("CronPage header", () => {
 
     await page.updateComplete;
 
-    expect(page.querySelector(".page-title")?.textContent).toBe("Automations");
+    expect(page.querySelector(".page-title")?.textContent).toBe("Tasks");
     expect(page.querySelector(".content-header--settings")).not.toBeNull();
     expect(page.querySelector(".page-subtitle")?.textContent).toBe(
       "Scheduled tasks and recurring agent runs.",

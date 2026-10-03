@@ -1,0 +1,421 @@
+import { randomUUID } from "node:crypto";
+import {
+  assertDelegation,
+  runSpecialist,
+  runStructureAnalyst,
+  SPECIALISTS,
+  type SpecialistId,
+} from "./domain/agents.js";
+import { calculateAtr, isGoldSymbol, type Candle } from "./domain/candles.js";
+import { copy, marketReasonCopy } from "./domain/copy.js";
+import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
+import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
+import { decideMonitorAction, nextNotice, shouldNotify, type Observation } from "./domain/monitor.js";
+import { bindTelegram } from "./domain/owner.js";
+import { authorizeTrade } from "./domain/permissions.js";
+import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
+import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
+import { classifyFeature, rollupUsage, type UsageEvent } from "./domain/usage.js";
+import { LonoraStore, type MemoryKind, type ResponsibilityRow } from "./store.js";
+
+export class LonoraService {
+  dailyBudgetUsd: number | null = null;
+  private lastDataStatus = "unknown";
+  private lastAssessment: string | null = null;
+  private lastDataError: string | null = null;
+
+  constructor(readonly store: LonoraStore) {}
+
+  ownerStatus() {
+    const owner = this.store.ensureLocalOwner();
+    return {
+      id: owner.id,
+      label: owner.label,
+      language: owner.language,
+      telegramBound: Boolean(owner.telegramChatId),
+      running: true,
+    };
+  }
+
+  bindTelegram(chatId: string) {
+    const owner = this.store.ensureLocalOwner();
+    const bound = bindTelegram(owner, chatId);
+    if (!bound.ok) {
+      return bound;
+    }
+    this.store.insertOwner(bound.owner);
+    return { ok: true as const };
+  }
+
+  marketSnapshot(now = Date.now()) {
+    const owner = this.store.ensureLocalOwner();
+    const clock = readMarketClock(now);
+    const observation = this.store.getObservation<Observation>();
+    return {
+      symbol: "XAUUSD",
+      clock,
+      message: marketReasonCopy(owner.language, clock.reason),
+      lastPrice: observation?.price ?? null,
+      stale: !clock.isOpen || this.lastDataStatus === "stale" || this.lastDataStatus === "unavailable",
+      invented: false,
+      dataStatus: clock.isOpen ? this.lastDataStatus : "closed",
+      dataError: this.lastDataError,
+      assessment: this.lastAssessment,
+      recommendations: this.store.listRecommendations().filter((plan) => plan.outcome === "pending"),
+      responsibilities: this.store.listResponsibilities().filter((row) => row.status === "running"),
+    };
+  }
+
+  observe(next: Observation, now = Date.now()) {
+    const previous = this.store.getObservation<Observation>();
+    const decision = decideMonitorAction(previous, next);
+    if (!next.marketOpen) {
+      this.store.saveObservation({ ...next, price: previous?.price ?? next.price });
+    } else {
+      this.store.saveObservation(next);
+    }
+    const owner = this.store.ensureLocalOwner();
+    const notices = [];
+    for (const key of decision.notificationKeys) {
+      const existing = this.store.getNotice(key);
+      if (!shouldNotify(existing, now)) {
+        continue;
+      }
+      const delivered = false;
+      const notice = nextNotice(
+        existing
+          ? {
+              key,
+              status: existing.status,
+              attempts: existing.attempts,
+              lastAttemptAt: existing.lastAttemptAt,
+              cooldownUntil: existing.cooldownUntil,
+            }
+          : null,
+        key,
+        now,
+        delivered,
+      );
+      this.store.saveNotice({ ...notice, payload: decision.reasons.join(",") });
+      notices.push(notice);
+    }
+    return {
+      decision,
+      notices,
+      message: decision.material
+        ? decision.reasons.join(", ")
+        : copy(owner.language, "notify.unchanged"),
+    };
+  }
+
+  readCandles() {
+    return readGoldCandles();
+  }
+
+  async monitorOnce(now = Date.now()) {
+    const clock = readMarketClock(now);
+    const previous = this.store.getObservation<Observation>();
+    let price = previous?.price ?? null;
+    let candleTime = previous?.candleTime ?? null;
+    let atr = previous?.atr ?? null;
+    let structureEventKey = previous?.structureEventKey ?? null;
+    let candles: Candle[] = [];
+    if (!clock.isOpen) {
+      this.lastDataStatus = "closed";
+      this.lastDataError = null;
+    } else {
+      const read = await this.readCandles();
+      if (!read.ok) {
+        this.lastDataStatus = "unavailable";
+        this.lastDataError = read.error ?? "Market data is unavailable.";
+      } else {
+        const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
+        candles = visible.candles as Candle[];
+        this.lastDataStatus = visible.stale ? "stale" : "ok";
+        this.lastDataError = visible.stale ? "Candle data is stale." : null;
+        price = candles.at(-1)?.close ?? null;
+        candleTime = candles.at(-1)?.time ?? null;
+        atr = calculateAtr(candles);
+        const structure = runStructureAnalyst(candles);
+        const latest = structure.data.latest as { type?: string; breakCandleTime?: number } | null;
+        structureEventKey =
+          latest?.type && latest.breakCandleTime
+            ? `${latest.type}:${latest.breakCandleTime}`
+            : "none";
+        this.gradeRecommendations(candles);
+      }
+    }
+    const observed = this.observe(
+      {
+        candleTime,
+        price,
+        session: clock.session,
+        marketOpen: clock.isOpen,
+        atr,
+        structureEventKey,
+        recommendationFingerprint: this.store
+          .listRecommendations()
+          .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
+          .join("|"),
+      },
+      now,
+    );
+    if (observed.decision.deepAnalysis && candles.length > 0 && this.withinBudget(now)) {
+      const result = this.delegate({ agent: "structure-analyst", candles });
+      this.lastAssessment = "summary" in result ? result.summary : null;
+    }
+    for (const row of this.store.listResponsibilities()) {
+      if (row.status !== "running") {
+        continue;
+      }
+      this.store.saveResponsibility({
+        ...row,
+        lastCheckAt: now,
+        lastEvent: observed.message,
+      });
+    }
+    return { ...observed, dataStatus: this.lastDataStatus, assessment: this.lastAssessment };
+  }
+
+  private withinBudget(now: number) {
+    if (this.dailyBudgetUsd == null) {
+      return true;
+    }
+    const cost = this.usageSummary(now).costTodayUsd ?? 0;
+    return cost < this.dailyBudgetUsd;
+  }
+
+  saveRecommendation(plan: RecommendationPlan) {
+    if (!isGoldSymbol(plan.symbol)) {
+      throw new Error("Lonora recommendations are for XAUUSD.");
+    }
+    this.store.saveRecommendation(plan);
+    return plan;
+  }
+
+  gradeRecommendations(candles: { time: number; open: number; high: number; low: number; close: number }[]) {
+    const updated = [];
+    for (const plan of this.store.listRecommendations()) {
+      const evaluation = evaluateRecommendation(plan, candles);
+      if (!evaluation.changed && evaluation.outcome === plan.outcome) {
+        continue;
+      }
+      const next: RecommendationPlan = {
+        ...plan,
+        status: evaluation.status,
+        outcome: evaluation.outcome,
+        effectiveEntry: evaluation.effectiveEntry,
+        triggeredAt: evaluation.triggeredAt,
+        tp1HitAt: evaluation.tp1HitAt,
+        tp2HitAt: evaluation.tp2HitAt,
+        tp3HitAt: evaluation.tp3HitAt,
+      };
+      this.store.saveRecommendation(next);
+      updated.push(next);
+    }
+    return updated;
+  }
+
+  remember(kind: MemoryKind, content: string, symbol?: string) {
+    return this.store.addMemory({ kind, content, symbol });
+  }
+
+  recall(query: string, kind?: MemoryKind) {
+    return this.store.searchMemory(query, kind);
+  }
+
+  upsertResponsibility(input: {
+    id?: string;
+    title: string;
+    instruction: string;
+    status?: ResponsibilityRow["status"];
+  }): ResponsibilityRow {
+    const existing = input.id
+      ? this.store.listResponsibilities().find((row) => row.id === input.id)
+      : undefined;
+    const row: ResponsibilityRow = {
+      id: existing?.id ?? input.id ?? randomUUID(),
+      title: input.title,
+      instruction: input.instruction,
+      status: input.status ?? existing?.status ?? "running",
+      lastCheckAt: existing?.lastCheckAt ?? null,
+      nextCheckAt: existing?.nextCheckAt ?? null,
+      lastEvent: existing?.lastEvent ?? null,
+    };
+    this.store.saveResponsibility(row);
+    return row;
+  }
+
+  setResponsibilityStatus(id: string, status: ResponsibilityRow["status"]) {
+    const existing = this.store.listResponsibilities().find((row) => row.id === id);
+    if (!existing) {
+      throw new Error(`No responsibility ${id}.`);
+    }
+    const next = { ...existing, status };
+    this.store.saveResponsibility(next);
+    return next;
+  }
+
+  delegate(input: {
+    agent: SpecialistId;
+    candles?: Candle[];
+    higher?: Candle[];
+    entry?: number;
+    stopLoss?: number;
+    targets?: number[];
+    note?: string;
+    depth?: number;
+    childCount?: number;
+    parentRunId?: string;
+  }) {
+    try {
+      assertDelegation({
+        depth: input.depth ?? 1,
+        childCount: input.childCount ?? 0,
+        requested: 1,
+        timeoutMs: 20_000,
+        tokenBudget: 4_000,
+      });
+    } catch (error) {
+      const summary = error instanceof Error ? error.message : "Delegation refused.";
+      this.store.recordAgentRun({
+        agent: input.agent,
+        parentRunId: input.parentRunId,
+        status: "failed",
+        summary,
+      });
+      return { ok: false as const, agent: input.agent, summary, failure: "delegation_limit" };
+    }
+    const result = runSpecialist(input.agent, input);
+    this.store.recordAgentRun({
+      agent: input.agent,
+      parentRunId: input.parentRunId,
+      status: result.ok ? "ok" : "failed",
+      summary: result.summary,
+    });
+    return result;
+  }
+
+  agentsView() {
+    const runs = this.store.listAgentRuns();
+    return SPECIALISTS.map((agent) => {
+      const latest = runs.find((run) => run.agent === agent);
+      const alwaysOn = agent === "market-watcher" || agent === "system-guardian";
+      return {
+        agent,
+        state: alwaysOn ? "running" : "on_demand",
+        purpose: purposeFor(agent),
+        lastRunAt: latest?.startedAt ?? null,
+        lastResult: latest?.summary ?? null,
+        tokens: (latest?.inputTokens ?? 0) + (latest?.outputTokens ?? 0),
+      };
+    });
+  }
+
+  recordModelUsage(input: {
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    sessionKey?: string;
+    jobId?: string;
+    agent?: string;
+  }): UsageEvent {
+    const event: UsageEvent = {
+      id: randomUUID(),
+      at: Date.now(),
+      provider: input.provider,
+      model: input.model,
+      feature: classifyFeature(input),
+      agent: input.agent ?? "lonora",
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+      estimated: true,
+    };
+    this.store.addUsage(event);
+    return event;
+  }
+
+  usageSummary(now = Date.now()) {
+    return rollupUsage(this.store.listUsage(), now);
+  }
+
+  async connectProvider(input: {
+    provider: string;
+    apiKey: string;
+    fetchImpl?: typeof fetch;
+  }) {
+    if (!isLonoraProvider(input.provider)) {
+      return { ok: false as const, error: "Lonora only connects Anthropic, OpenAI, Z.AI, and OpenRouter." };
+    }
+    const probe = await probeProvider({
+      provider: input.provider as LonoraProviderId,
+      apiKey: input.apiKey,
+      fetchImpl: input.fetchImpl,
+    });
+    this.store.saveProviderSecret({
+      provider: probe.provider,
+      apiKey: input.apiKey,
+      defaultModel: probe.defaultModel,
+      status: probe.connected ? "connected" : input.apiKey.trim() ? "invalid" : "not_connected",
+      lastError: probe.error,
+    });
+    return {
+      ok: probe.connected,
+      provider: probe.provider,
+      connected: probe.connected,
+      defaultModel: probe.defaultModel,
+      models: probe.models,
+      error: probe.error,
+    };
+  }
+
+  providerSettings() {
+    const known = new Set(this.store.listProviderStatus().map((row) => row.provider));
+    const stored = this.store.listProviderStatus();
+    return (["anthropic", "openai", "zai", "openrouter"] as const).map((provider) => {
+      const row = stored.find((item) => item.provider === provider);
+      return {
+        provider,
+        connected: row?.connected ?? false,
+        defaultModel: row?.defaultModel ?? null,
+        status: row?.status ?? "not_connected",
+        lastError: row?.lastError ?? null,
+        configured: known.has(provider),
+      };
+    });
+  }
+
+  confirmTrade(input: { caller: "owner" | "monitor" | "schedule" | "subagent" | "model" | "chat"; ownerConfirmed?: boolean }) {
+    const decision = authorizeTrade(input);
+    if (!decision.ok) {
+      return { ok: false as const, code: decision.code, brokerCalled: false };
+    }
+    return { ok: false as const, code: "not_linked" as const, brokerCalled: false };
+  }
+}
+
+function purposeFor(agent: SpecialistId): string {
+  switch (agent) {
+    case "market-watcher":
+      return "Watch gold for material changes without calling a model every candle.";
+    case "structure-analyst":
+      return "Read swings, trend, and structure breaks from closed candles.";
+    case "liquidity-analyst":
+      return "Locate equal highs and lows where stops are likely resting.";
+    case "supply-demand-analyst":
+      return "Mark impulse supply and demand zones.";
+    case "multi-timeframe-analyst":
+      return "Compare the working timeframe with the higher timeframe bias.";
+    case "macro-news-analyst":
+      return "Summarize supplied macro context. It does not invent events.";
+    case "risk-reviewer":
+      return "Grade reward against stop distance.";
+    case "research-agent":
+      return "Compare a supplied historical candle sample.";
+    case "memory-curator":
+      return "Compact a lesson so later responsibilities stay small.";
+    case "system-guardian":
+      return "Keep delegation limits and the manual trade boundary intact.";
+  }
+}

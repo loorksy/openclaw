@@ -76,6 +76,6 @@ function defineSkillsPage(routeId: "skills" | "skill-settings", surface: "discov
 }
 
 export const pages = [
-  defineSkillsPage("skills", "discovery"),
+  defineSkillsPage("skills", "settings"),
   defineSkillsPage("skill-settings", "settings"),
 ] as const;

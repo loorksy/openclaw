@@ -288,7 +288,16 @@ class SkillsPage extends OpenClawLightDomElement {
     }
     this.routeDataEnabled = true;
     this.skillsLoading = false;
-    this.skillsReport = data.report;
+    this.skillsReport = data.report
+      ? {
+          ...data.report,
+          skills: data.report.skills.filter((skill) =>
+            /xauusd|market-structure|liquidity|supply-demand|gold|recommendation|trading/i.test(
+              `${skill.skillKey} ${skill.name} ${skill.description}`,
+            ),
+          ),
+        }
+      : null;
     this.skillsError = data.error;
     if (data.report) {
       void loadClawHubSecurityVerdicts(this, data.report);

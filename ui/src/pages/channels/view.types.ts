@@ -38,6 +38,8 @@ export type ChannelsProps = {
   pairingNotice: string | null;
   canManagePairing: boolean;
   canAdmin: boolean;
+  /** When set, the owner hub lists only these channel ids. */
+  ownerChannelKeys?: readonly string[];
   showAdvancedSettings: boolean;
   nostrProfileFormState: NostrProfileFormState | null;
   nostrProfileAccountId: string | null;

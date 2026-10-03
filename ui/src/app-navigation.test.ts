@@ -114,23 +114,23 @@ describe("settingsSearchTextMatches", () => {
 
 describe("formatDocumentTitle", () => {
   it("does not duplicate a context ending in the brand", () => {
-    expect(formatDocumentTitle({ context: "Ask OpenClaw" })).toBe("Ask OpenClaw");
-    expect(formatDocumentTitle({ context: "OpenClaw" })).toBe("OpenClaw");
+    expect(formatDocumentTitle({ context: "Ask Lonora" })).toBe("Ask Lonora");
+    expect(formatDocumentTitle({ context: "Lonora" })).toBe("Lonora");
   });
 
   it("names the disconnected gateway without implying internet loss", () => {
     expect(formatDocumentTitle({ context: "Usage", gatewayDisconnected: true })).toBe(
-      "(Disconnected) Usage — OpenClaw",
+      "(Disconnected) Usage — Lonora",
     );
   });
 
   it("shows attention separately from the disconnected state", () => {
     expect(formatDocumentTitle({ context: "Usage", attentionCount: 3 })).toBe(
-      "(3) Usage — OpenClaw",
+      "(3) Usage — Lonora",
     );
     expect(
       formatDocumentTitle({ context: "Usage", attentionCount: 3, gatewayDisconnected: true }),
-    ).toBe("(Disconnected) Usage — OpenClaw");
+    ).toBe("(Disconnected) Usage — Lonora");
   });
 });
 
@@ -450,17 +450,13 @@ describe("plugin tabs route", () => {
 describe("SIDEBAR_NAV_ROUTES", () => {
   it("keeps the canonical sidebar route order", () => {
     expect(SIDEBAR_NAV_ROUTES).toEqual([
-      "agents-home",
-      "dashboards",
-      "usage",
+      "chat",
+      "market",
+      "recommendations",
       "cron",
-      "sessions",
-      "systems",
-      "activity",
-      "meetings",
-      "plugins",
-      "apps",
-      "portals",
+      "agents-home",
+      "skills",
+      "usage",
     ]);
   });
 
@@ -475,34 +471,12 @@ describe("SIDEBAR_NAV_ROUTES", () => {
   it("keeps the canonical settings navigation order", () => {
     const settingsRoutes = visibleSettingsNavigationGroups(true).flatMap((group) => group.routes);
     expect(settingsRoutes).toEqual([
-      "custodian",
       "profile",
       "appearance",
       "notifications",
-      "connection",
       "channels",
-      "communications",
-      "talk",
-      "devices",
-      "cloud-workers",
-      "agents",
       "model-providers",
-      "search",
-      "plugin-settings",
-      "skill-settings",
-      "mcp",
-      "memory",
-      "automation",
-      "security",
-      "secrets",
-      "approvals",
-      "infrastructure",
-      "labs",
       "advanced",
-      "debug",
-      "logs",
-      "updates",
-      "about",
     ]);
   });
 
@@ -510,7 +484,7 @@ describe("SIDEBAR_NAV_ROUTES", () => {
     const settingsGroups = visibleSettingsNavigationGroups(true);
     const [firstGroup] = settingsGroups;
     expect(firstGroup?.labelKey).toBeNull();
-    expect(firstGroup?.routes).toEqual(["custodian", "profile", "appearance", "notifications"]);
+    expect(firstGroup?.routes).toEqual(["profile", "appearance", "notifications"]);
     for (const group of settingsGroups.slice(1)) {
       expect(group.labelKey).toBeTruthy();
     }

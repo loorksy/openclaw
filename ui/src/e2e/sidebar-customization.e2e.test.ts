@@ -230,7 +230,7 @@ suite.define(() => {
       );
       await expect
         .poll(() => trimmedTextContents(pinnedItems))
-        .toEqual(["Agents", "Dashboards", "Systems", "Automations", "Plugins"]);
+        .toEqual(["Chat", "Market", "Recommendations", "Tasks", "Agents", "Skills", "Usage & Cost"]);
       // Desktop renders no topbar row: the sidebar owns navigation.
       await expect.poll(() => page.locator(".topbar").isVisible()).toBe(false);
       const shellNav = page.locator(".shell-nav");
@@ -520,8 +520,8 @@ suite.define(() => {
       await expect
         .poll(() => trimmedTextContents(menu.getByRole("menuitemcheckbox")))
         .not.toContain("Workboard");
-      const usageItem = menu.getByRole("menuitemcheckbox", { name: "Usage" });
-      await expect.poll(() => usageItem.getAttribute("aria-checked")).toBe("false");
+      const skillsItem = menu.getByRole("menuitemcheckbox", { name: "Skills" });
+      await expect.poll(() => skillsItem.getAttribute("aria-checked")).toBe("true");
       // Ask OpenClaw moved to Settings (#111686): custodian is not a sidebar
       // nav route anymore, so the pin editor does not offer it.
       await expect
@@ -529,14 +529,14 @@ suite.define(() => {
         .toBe(0);
       await captureUiProof(page, "02-customize-menu.png", menu.locator('[part="menu"]'));
 
-      await usageItem.click();
+      await skillsItem.click();
       await expect
         .poll(() => trimmedTextContents(pinnedItems))
-        .toEqual(["Agents", "Dashboards", "Systems", "Automations", "Plugins", "Usage"]);
+        .toEqual(["Chat", "Market", "Recommendations", "Tasks", "Agents", "Usage & Cost"]);
       await page.reload();
       await expect
         .poll(() => trimmedTextContents(pinnedItems))
-        .toEqual(["Agents", "Dashboards", "Systems", "Automations", "Plugins", "Usage"]);
+        .toEqual(["Chat", "Market", "Recommendations", "Tasks", "Agents", "Usage & Cost"]);
       // The More menu is transient: closed after reload, unpinned routes inside.
       await expect.poll(() => moreButton.getAttribute("aria-expanded")).toBe("false");
       await openSidebarMoreMenu(page);
@@ -547,7 +547,7 @@ suite.define(() => {
       await expect.poll(() => editPersistedPinnedItems.isVisible()).toBe(true);
       await expect
         .poll(() => trimmedTextContents(moreMenu.getByRole("menuitem")))
-        .not.toContain("Usage");
+        .not.toContain("Skills");
       await captureUiProof(
         page,
         "03-persisted-customization.png",
@@ -558,7 +558,7 @@ suite.define(() => {
       await menu.getByRole("menuitem", { name: "Reset pinned items" }).click();
       await expect
         .poll(() => trimmedTextContents(pinnedItems))
-        .toEqual(["Agents", "Dashboards", "Systems", "Automations", "Plugins"]);
+        .toEqual(["Chat", "Market", "Recommendations", "Tasks", "Agents", "Skills", "Usage & Cost"]);
 
       // The sidebar header search button is the command palette entry point.
       const searchButton = page.locator(".sidebar-brand__search");

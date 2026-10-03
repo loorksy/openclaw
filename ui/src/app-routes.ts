@@ -48,6 +48,7 @@ import { page as devicesPage } from "./pages/devices/route.ts";
 import { page as labsPage } from "./pages/labs/route.ts";
 import { page as lobsterdexPage } from "./pages/lobsterdex/route.ts";
 import { page as logsPage } from "./pages/logs/route.ts";
+import { page as marketPage } from "./pages/market/route.ts";
 import { page as meetingsPage } from "./pages/meetings/route.ts";
 import { page as memoryImportPage } from "./pages/memory-import/route.ts";
 import { page as modelProvidersPage } from "./pages/model-providers/route.ts";
@@ -57,6 +58,7 @@ import { page as pluginPage } from "./pages/plugin/route.ts";
 import { pages as pluginsPages } from "./pages/plugins/route.ts";
 import { page as portalsPage } from "./pages/portals/route.ts";
 import { page as profilePage } from "./pages/profile/route.ts";
+import { page as recommendationsPage } from "./pages/recommendations/route.ts";
 import { page as searchPage } from "./pages/search/route.ts";
 import { page as secretsPage } from "./pages/secrets/route.ts";
 import { page as sessionsPage } from "./pages/sessions/route.ts";
@@ -116,6 +118,8 @@ const APP_ROUTE_TREE = [
   usagePage,
   debugPage,
   logsPage,
+  marketPage,
+  recommendationsPage,
   skillWorkshopPage,
   ...skillsPages,
   ...pluginsPages,

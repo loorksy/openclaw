@@ -1,0 +1,41 @@
+{
+  "id": "lonora",
+  "name": "Lonora",
+  "description": "Private gold-market intelligence for the Lonora owner: market reads, recommendations, responsibilities, and specialist analysis.",
+  "categories": ["productivity"],
+  "enabledByDefault": true,
+  "skills": ["./skills"],
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "lonora_market_snapshot",
+      "lonora_candles",
+      "lonora_analyze_structure",
+      "lonora_analyze_liquidity",
+      "lonora_analyze_supply_demand",
+      "lonora_calendar",
+      "lonora_recommendations",
+      "lonora_memory",
+      "lonora_responsibility",
+      "lonora_delegate",
+      "lonora_notify",
+      "lonora_execute_trade"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "monitorIntervalMs": {
+        "type": "integer",
+        "minimum": 15000
+      },
+      "dailyBudgetUsd": {
+        "type": "number",
+        "minimum": 0
+      }
+    }
+  }
+}

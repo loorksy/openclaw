@@ -723,7 +723,7 @@ describe("ChannelsPage lifecycle", () => {
       } as unknown as ApplicationGatewaySnapshot["hello"],
     });
     const source = createContext(gateway);
-    const config = { channels: { whatsapp: { enabled: true } } };
+    const config = { channels: { telegram: { enabled: true } } };
     const channel = {
       configured: true,
       linked: true,
@@ -733,9 +733,9 @@ describe("ChannelsPage lifecycle", () => {
     };
     source.channels.state.channelsSnapshot = {
       ts: 0,
-      channelOrder: ["whatsapp"],
-      channelLabels: { whatsapp: "WhatsApp" },
-      channels: { whatsapp: channel },
+      channelOrder: ["telegram"],
+      channelLabels: { telegram: "Telegram" },
+      channels: { telegram: channel },
       channelAccounts: {},
       channelDefaultAccountId: {},
     };
@@ -756,7 +756,7 @@ describe("ChannelsPage lifecycle", () => {
           channels: {
             type: "object",
             properties: {
-              whatsapp: {
+              telegram: {
                 type: "object",
                 properties: { enabled: { type: "boolean", title: "Enabled" } },
               },
@@ -764,7 +764,7 @@ describe("ChannelsPage lifecycle", () => {
           },
         },
       },
-      configUiHints: { "channels.whatsapp.enabled": { advanced: false } },
+      configUiHints: { "channels.telegram.enabled": { advanced: false } },
     });
     const refreshConfig = vi.spyOn(source.runtimeConfig, "refresh");
     const refreshChannels = vi.spyOn(source.channels, "refresh");
@@ -787,7 +787,7 @@ describe("ChannelsPage lifecycle", () => {
 
     page.querySelector<HTMLButtonElement>(".channels-item")!.click();
     await page.updateComplete;
-    source.runtimeConfig.patchForm(["channels", "whatsapp", "enabled"], false);
+    source.runtimeConfig.patchForm(["channels", "telegram", "enabled"], false);
     await page.updateComplete;
     const save = page.querySelector<HTMLButtonElement>(".channels-detail .btn.primary")!;
     expect(save.disabled).toBe(false);
@@ -802,7 +802,7 @@ describe("ChannelsPage lifecycle", () => {
     });
     expect(source.runtimeConfig.state.configFormDirty).toBe(true);
     expect(source.runtimeConfig.state.configForm).toEqual({
-      channels: { whatsapp: { enabled: false } },
+      channels: { telegram: { enabled: false } },
     });
     expect(refreshConfig).not.toHaveBeenCalled();
     expect(refreshChannels).not.toHaveBeenCalled();

@@ -299,7 +299,7 @@ suite.define(() => {
           .poll(() => sidebar.locator('[data-agent-id="forge"]').getAttribute("aria-current"))
           .toBe("page");
         expect(await sidebar.locator('[data-session-key="agent:forge:main"]').count()).toBe(0);
-        await sidebar.getByRole("link", { name: "Automations", exact: true }).click();
+        await sidebar.getByRole("link", { name: "Tasks", exact: true }).click();
         await waitForControlUiRoute(page, { routeId: "cron" });
         await expect.poll(() => page.locator(".cron-table__row").count()).toBe(2);
         expect(
