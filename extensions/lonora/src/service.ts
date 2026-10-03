@@ -231,14 +231,20 @@ export class LonoraService {
     return readGoldCandles(count);
   }
 
-  async readHeadlines(now = Date.now()): Promise<HeadlineRead & { summary: string }> {
+  async readHeadlines(
+    now = Date.now(),
+    fetchImpl?: typeof fetch,
+  ): Promise<HeadlineRead & { summary: string }> {
     const language = this.store.ensureLocalOwner().language;
     try {
-      const read = await readGoldHeadlines({ now });
+      const read = await readGoldHeadlines({ now, fetchImpl });
       const summary = read.ok
         ? describeHeadlines(read.headlines, language)
         : copy(language, "headlines.unavailable");
       this.lastHeadlines = { known: read.ok, summary };
+      if (read.ok) {
+        this.noteHeadlines(summary);
+      }
       return { ...read, summary };
     } catch (error) {
       const summary = copy(language, "headlines.unavailable");
@@ -254,12 +260,18 @@ export class LonoraService {
     }
   }
 
-  async readCalendar(now = Date.now()): Promise<CalendarRead & { summary: string }> {
+  async readCalendar(
+    now = Date.now(),
+    fetchImpl?: typeof fetch,
+  ): Promise<CalendarRead & { summary: string }> {
     const language = this.store.ensureLocalOwner().language;
     try {
-      const read = await readGoldCalendar({ now });
+      const read = await readGoldCalendar({ now, fetchImpl });
       const summary = calendarSummary(read, language);
       this.lastCalendar = { known: read.ok, summary };
+      if (read.ok) {
+        this.noteCalendar(summary);
+      }
       return { ...read, summary };
     } catch (error) {
       const summary = copy(language, "calendar.unavailable");
@@ -696,7 +708,9 @@ export class LonoraService {
       kind === "structure_read" ||
       kind === "liquidity_read" ||
       kind === "zone_read" ||
-      kind === "timeframe_read"
+      kind === "timeframe_read" ||
+      kind === "calendar_read" ||
+      kind === "headline_read"
     ) {
       return null;
     }
@@ -801,6 +815,28 @@ export class LonoraService {
     }
   }
 
+  /**
+   * One calendar sentence after a successful read, including a quiet window.
+   * A failed or disabled feed does not replace the previous sentence.
+   */
+  private noteCalendar(summary: string): void {
+    const text = summary.replace(/\s+/g, " ").trim().slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("calendar_read", "XAUUSD", text);
+    }
+  }
+
+  /**
+   * One headline sentence after a successful read, including a quiet window.
+   * A failed or disabled feed does not replace the previous sentence.
+   */
+  private noteHeadlines(summary: string): void {
+    const text = summary.replace(/\s+/g, " ").trim().slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("headline_read", "XAUUSD", text);
+    }
+  }
+
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
   noteConversation(messages: readonly unknown[]): string | null {
     const text = latestOwnerText(messages);
@@ -853,6 +889,8 @@ export class LonoraService {
     const liquidity = this.store.listRecentMemory("liquidity_read", 1);
     const zones = this.store.listRecentMemory("zone_read", 1);
     const timeframe = this.store.listRecentMemory("timeframe_read", 1);
+    const calendar = this.store.listRecentMemory("calendar_read", 1);
+    const headlines = this.store.listRecentMemory("headline_read", 1);
     const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
@@ -870,6 +908,8 @@ export class LonoraService {
       liquidity.length === 0 &&
       zones.length === 0 &&
       timeframe.length === 0 &&
+      calendar.length === 0 &&
+      headlines.length === 0 &&
       conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
@@ -882,6 +922,12 @@ export class LonoraService {
     }
     if (observation[0]) {
       lines.push(`${copy(language, "memory.observation")} ${observation[0].content}`);
+    }
+    if (calendar[0]) {
+      lines.push(`${copy(language, "memory.calendar")} ${calendar[0].content}`);
+    }
+    if (headlines[0]) {
+      lines.push(`${copy(language, "memory.headlines")} ${headlines[0].content}`);
     }
     if (structure[0]) {
       lines.push(`${copy(language, "memory.structure")} ${structure[0].content}`);

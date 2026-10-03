@@ -14,6 +14,8 @@ export type MemoryKind =
   | "liquidity_read"
   | "zone_read"
   | "timeframe_read"
+  | "calendar_read"
+  | "headline_read"
   | "recommendation"
   | "historical_case"
   | "lesson"

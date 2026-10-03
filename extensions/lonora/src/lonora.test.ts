@@ -4,9 +4,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { runSpecialist } from "./domain/agents.js";
+import { resetCalendarCacheForTests } from "./domain/calendar.js";
 import type { Candle } from "./domain/candles.js";
 import { detectSwings, detectTrend } from "./domain/candles.js";
 import { copy, describeNotice } from "./domain/copy.js";
+import { resetHeadlineCacheForTests } from "./domain/headlines.js";
 import { readGoldCandles } from "./domain/market-data.js";
 import { candlesVisibleAt, isGoldMarketOpenAt, readMarketClock } from "./domain/market.js";
 import { decideMonitorAction, nextNotice, shouldNotify } from "./domain/monitor.js";
@@ -24,6 +26,10 @@ import { planBotyMigration } from "./migrate-boty.js";
 import { LONORA_TOOL_ALLOW } from "./policy.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
+
+function jsonBody(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
 
 function impulseZones(now: number): Candle[] {
   const bars: Candle[] = [];
@@ -419,7 +425,96 @@ describe("structure", () => {
     expect(arabic.summary).toBe(copy("ar", "calendar.unavailable"));
     expect(arabic.summary).toContain("التقويم الاقتصادي غير متاح");
     expect(arabic.summary).not.toContain("not available");
+    expect(service.ownerBrief(now)).toBe(
+      `${service.sessionSentence(now)} ${copy("ar", "memory.empty")}`,
+    );
+    expect(service.ownerBrief(now)).not.toContain(copy("ar", "calendar.unavailable"));
     store.close();
+  });
+
+  it("stores a successful calendar and headline read in the gold brief", async () => {
+    resetCalendarCacheForTests();
+    resetHeadlineCacheForTests();
+    const now = Date.parse("2026-01-05T12:00:00Z");
+    const later = now + 3 * 60 * 60_000;
+    const expired = later + 3 * 60 * 60_000;
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const calendarFetch = async () =>
+      jsonBody([{ title: "CPI", country: "USD", date: "2026-01-05T13:30:00Z", impact: "High" }]);
+    const saved = await service.readCalendar(now, calendarFetch);
+    expect(saved.ok).toBe(true);
+    expect(service.ownerBrief(now)).toContain("Calendar: High: CPI (USD) at");
+    expect(service.ownerBrief(now)).not.toContain(copy("en", "calendar.unavailable"));
+    const quiet = await service.readCalendar(later, async () => jsonBody([]));
+    expect(quiet.ok).toBe(true);
+    expect(quiet.summary).toBe(copy("en", "calendar.empty"));
+    expect(service.ownerBrief(later)).toContain(copy("en", "calendar.empty"));
+    expect(service.ownerBrief(later)).not.toContain("CPI");
+    const failed = await service.readCalendar(expired, async () =>
+      jsonBody({ error: "nope" }, 500),
+    );
+    expect(failed.ok).toBe(false);
+    expect(failed.summary).toBe(copy("en", "calendar.unavailable"));
+    expect(service.ownerBrief(expired)).toContain(copy("en", "calendar.empty"));
+    expect(service.ownerBrief(expired)).not.toContain(copy("en", "calendar.unavailable"));
+    expect(service.remember("calendar_read", "invented CPI tomorrow", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief(expired)).not.toContain("invented CPI");
+    store.setLanguage("ar");
+    resetCalendarCacheForTests();
+    const arabic = await service.readCalendar(now, calendarFetch);
+    expect(arabic.summary).toContain("عالي: CPI (USD)");
+    expect(service.ownerBrief(now)).toContain("التقويم: عالي: CPI (USD)");
+    expect(service.ownerBrief(now)).not.toContain("Calendar:");
+    store.close();
+
+    process.env.FMP_API_KEY = "test-key";
+    try {
+      resetHeadlineCacheForTests();
+      const headlines = LonoraStore.open(":memory:");
+      const headlineService = new LonoraService(headlines);
+      const headlineFetch = async () =>
+        jsonBody([
+          {
+            title: "Gold slips before CPI",
+            publishedDate: "2026-01-05 11:00:00",
+            site: "Reuters",
+            symbol: "XAUUSD",
+          },
+        ]);
+      const known = await headlineService.readHeadlines(now, headlineFetch);
+      expect(known.ok).toBe(true);
+      expect(headlineService.ownerBrief(now)).toContain(
+        "Headlines: Gold slips before CPI from Reuters at",
+      );
+      const emptyTape = await headlineService.readHeadlines(later, async () => jsonBody([]));
+      expect(emptyTape.ok).toBe(true);
+      expect(headlineService.ownerBrief(later)).toContain(copy("en", "headlines.empty"));
+      expect(headlineService.ownerBrief(later)).not.toContain("Gold slips");
+      const missed = await headlineService.readHeadlines(expired, async () =>
+        jsonBody({ "Error Message": "secret-key" }, 401),
+      );
+      expect(missed.ok).toBe(false);
+      expect(headlineService.ownerBrief(expired)).toContain(copy("en", "headlines.empty"));
+      expect(headlineService.ownerBrief(expired)).not.toContain(
+        copy("en", "headlines.unavailable"),
+      );
+      expect(headlineService.remember("headline_read", "invented tape", "XAUUSD")).toBeNull();
+      expect(headlineService.ownerBrief(expired)).not.toContain("invented tape");
+      headlines.setLanguage("ar");
+      resetHeadlineCacheForTests();
+      const arabicHeadlines = await headlineService.readHeadlines(now, headlineFetch);
+      expect(arabicHeadlines.summary).toContain("Gold slips before CPI من Reuters");
+      expect(headlineService.ownerBrief(now)).toContain(
+        "العناوين: Gold slips before CPI من Reuters",
+      );
+      expect(headlineService.ownerBrief(now)).not.toContain("Headlines:");
+      headlines.close();
+    } finally {
+      delete process.env.FMP_API_KEY;
+      resetCalendarCacheForTests();
+      resetHeadlineCacheForTests();
+    }
   });
 
   it("does not invent a calendar event when the feed is unknown", () => {
