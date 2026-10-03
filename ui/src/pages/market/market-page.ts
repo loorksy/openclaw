@@ -9,7 +9,7 @@ import { isGatewayMethodAdvertised } from "../../lib/gateway-methods.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import { lonoraRequestTarget } from "../lonora/request.ts";
-import { candleChart, type ChartCandle } from "./chart.ts";
+import { candleChart, type ChartCandle, type ChartMark } from "./chart.ts";
 
 registerLonoraEnglish();
 
@@ -344,7 +344,17 @@ class MarketPage extends OpenClawLightDomElement {
                 </button>
                 <p role="status">${this.historyText ?? t("lonora.market.historyEmpty")}</p>
                 <h2>${t("lonora.market.chart")}</h2>
-                ${renderChart(this.candles, this.chartError)}
+                ${renderChart(
+                  this.candles,
+                  this.chartError,
+                  chartMarks({
+                    priorDay: this.priorDay,
+                    buySide: this.buySide,
+                    sellSide: this.sellSide,
+                    demand: this.demandZone,
+                    supply: this.supplyZone,
+                  }),
+                )}
                 <h2>${t("lonora.market.priorDay")}</h2>
                 <p>${priorDayText(this.priorDay, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.range")}</h2>
@@ -702,8 +712,37 @@ function sweepText(
   return t("lonora.market.sweepNone");
 }
 
-function renderChart(candles: ChartCandle[], error: string | null) {
-  const chart = candleChart(candles);
+function chartMarks(input: {
+  priorDay: PriorDayView | null;
+  buySide: number | null;
+  sellSide: number | null;
+  demand: ZoneView | null;
+  supply: ZoneView | null;
+}): ChartMark[] {
+  const marks: ChartMark[] = [];
+  if (input.priorDay && input.priorDay.invented === false) {
+    marks.push(
+      { kind: "prior-high", price: input.priorDay.high },
+      { kind: "prior-low", price: input.priorDay.low },
+    );
+  }
+  if (input.buySide != null) {
+    marks.push({ kind: "buy-side", price: input.buySide });
+  }
+  if (input.sellSide != null) {
+    marks.push({ kind: "sell-side", price: input.sellSide });
+  }
+  if (input.demand) {
+    marks.push({ kind: "demand", low: input.demand.low, high: input.demand.high });
+  }
+  if (input.supply) {
+    marks.push({ kind: "supply", low: input.supply.low, high: input.supply.high });
+  }
+  return marks;
+}
+
+function renderChart(candles: ChartCandle[], error: string | null, marks: ChartMark[]) {
+  const chart = candleChart(candles, marks);
   if (!chart) {
     return html`<p>${error ?? t("lonora.market.chartEmpty")}</p>`;
   }
@@ -713,6 +752,28 @@ function renderChart(candles: ChartCandle[], error: string | null) {
     role="img"
     aria-label=${t("lonora.market.chart")}
   >
+    ${chart.bands.map(
+      (band) => svg`
+        <rect
+          x="0"
+          y=${band.y}
+          width=${chart.width}
+          height=${band.height}
+          fill=${band.kind === "demand" ? "#1f8a4c22" : "#b4231822"}
+        ></rect>
+      `,
+    )}
+    ${chart.lines.map(
+      (line) => svg`
+        <line
+          x1="0"
+          x2=${chart.width}
+          y1=${line.y}
+          y2=${line.y}
+          stroke=${line.kind === "prior-high" || line.kind === "prior-low" ? "#8a7340" : line.kind === "buy-side" ? "#1f6f8a" : "#8a4b1f"}
+        ></line>
+      `,
+    )}
     ${chart.bars.map(
       (bar) => svg`
         <line

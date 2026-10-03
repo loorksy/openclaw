@@ -16,19 +16,57 @@ export type ChartBar = {
   up: boolean;
 };
 
+export type ChartLineKind = "prior-high" | "prior-low" | "buy-side" | "sell-side";
+
+export type ChartMark =
+  | { kind: ChartLineKind; price: number }
+  | { kind: "demand" | "supply"; low: number; high: number };
+
+export type ChartLine = { kind: ChartLineKind; y: number };
+
+export type ChartBand = { kind: "demand" | "supply"; y: number; height: number };
+
 const WIDTH = 640;
 const HEIGHT = 220;
 const PAD = 8;
 
-/** Draw only the candles that were supplied. An empty read draws nothing. */
+/**
+ * Draw the supplied closed candles. Known levels widen the scale and are drawn
+ * with them. An empty candle read draws nothing, even if levels were supplied.
+ */
 export function candleChart(
   candles: ChartCandle[],
-): { width: number; height: number; bars: ChartBar[] } | null {
+  marks: readonly ChartMark[] = [],
+): {
+  width: number;
+  height: number;
+  bars: ChartBar[];
+  lines: ChartLine[];
+  bands: ChartBand[];
+} | null {
   if (candles.length === 0) {
     return null;
   }
-  const min = Math.min(...candles.map((candle) => candle.low));
-  const max = Math.max(...candles.map((candle) => candle.high));
+  const lines: { kind: ChartLineKind; price: number }[] = [];
+  const bands: { kind: "demand" | "supply"; low: number; high: number }[] = [];
+  for (const mark of marks) {
+    if (mark.kind === "demand" || mark.kind === "supply") {
+      if (mark.high > mark.low && mark.low > 0 && Number.isFinite(mark.high)) {
+        bands.push({ kind: mark.kind, low: mark.low, high: mark.high });
+      }
+      continue;
+    }
+    if (Number.isFinite(mark.price) && mark.price > 0) {
+      lines.push({ kind: mark.kind, price: mark.price });
+    }
+  }
+  const prices = [
+    ...candles.flatMap((candle) => [candle.low, candle.high]),
+    ...lines.map((line) => line.price),
+    ...bands.flatMap((band) => [band.low, band.high]),
+  ];
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
   if (![min, max].every(Number.isFinite)) {
     return null;
   }
@@ -51,6 +89,12 @@ export function candleChart(
         width: bodyWidth,
         up: candle.close >= candle.open,
       };
+    }),
+    lines: lines.map((line) => ({ kind: line.kind, y: yFor(line.price) })),
+    bands: bands.map((band) => {
+      const top = yFor(band.high);
+      const bottom = yFor(band.low);
+      return { kind: band.kind, y: top, height: Math.max(1, bottom - top) };
     }),
   };
 }
