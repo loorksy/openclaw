@@ -992,7 +992,7 @@ export class LonoraService {
       return {
         agent,
         state: alwaysOn ? "running" : "on_demand",
-        purpose: purposeFor(agent),
+        purpose: purposeFor(agent, this.store.ensureLocalOwner().language),
         lastRunAt: latest?.startedAt ?? null,
         lastResult: latest?.summary ?? null,
         tokens: (latest?.inputTokens ?? 0) + (latest?.outputTokens ?? 0),
@@ -1151,27 +1151,27 @@ function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
     : `${side} ${plan.entry}, ${levels}, ${copy(language, "memory.planTarget")} ${target}`;
 }
 
-function purposeFor(agent: SpecialistId): string {
+function purposeFor(agent: SpecialistId, language: OwnerLanguage): string {
   switch (agent) {
     case "market-watcher":
-      return "Watch gold for material changes without calling a model every candle.";
+      return copy(language, "purpose.marketWatcher");
     case "structure-analyst":
-      return "Read swings, trend, and structure breaks from closed candles.";
+      return copy(language, "purpose.structure");
     case "liquidity-analyst":
-      return "Locate equal highs and lows where stops are likely resting.";
+      return copy(language, "purpose.liquidity");
     case "supply-demand-analyst":
-      return "Mark impulse supply and demand zones.";
+      return copy(language, "purpose.zones");
     case "multi-timeframe-analyst":
-      return "Compare the working timeframe with the higher timeframe bias.";
+      return copy(language, "purpose.mtf");
     case "macro-news-analyst":
-      return "Read the economic calendar and gold headlines. A failed feed stays unknown.";
+      return copy(language, "purpose.macro");
     case "risk-reviewer":
-      return "Grade reward against stop distance.";
+      return copy(language, "purpose.risk");
     case "research-agent":
-      return "Compare earlier closed gold moments. A small sample does not become a rate.";
+      return copy(language, "purpose.research");
     case "memory-curator":
-      return "Compact a lesson so later responsibilities stay small.";
+      return copy(language, "purpose.memory");
     case "system-guardian":
-      return "Keep delegation limits and the manual trade boundary intact.";
+      return copy(language, "purpose.guardian");
   }
 }

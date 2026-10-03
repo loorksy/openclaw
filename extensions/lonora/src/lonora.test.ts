@@ -255,6 +255,19 @@ describe("structure", () => {
     store.close();
   });
 
+  it("names specialist purposes in the owner language", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    expect(service.agentsView().find((row) => row.agent === "structure-analyst")?.purpose).toBe(
+      "Read swings, trend, and structure breaks from closed candles.",
+    );
+    store.setLanguage("ar");
+    const purposes = service.agentsView().map((row) => row.purpose);
+    expect(purposes).toContain("يقرأ التأرجح والاتجاه وكسور الهيكل من الشموع المغلقة.");
+    expect(purposes.join(" ")).not.toContain("closed candles");
+    store.close();
+  });
+
   it("reports a buy-side sweep from the closed candles", () => {
     const candles = [
       ...Array.from({ length: 8 }, (_, index) => ({

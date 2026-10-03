@@ -98,6 +98,20 @@ const COPY = {
     "memory.zones": "Latest zones:",
     "memory.plans": "Open plans:",
     "memory.risk": "Plan grade:",
+    "purpose.marketWatcher":
+      "Watch gold for material changes without calling a model every candle.",
+    "purpose.structure": "Read swings, trend, and structure breaks from closed candles.",
+    "purpose.liquidity": "Locate equal highs and lows where stops are likely resting.",
+    "purpose.zones": "Mark impulse supply and demand zones.",
+    "purpose.mtf":
+      "Compare the working timeframe with the four-hour read. A short sample stays unread.",
+    "purpose.macro": "Read the economic calendar and gold headlines. A failed feed stays unknown.",
+    "purpose.risk":
+      "Grade the open plan's first target against its stop. A missing spread is not a net reward.",
+    "purpose.research":
+      "Compare earlier closed gold moments. A small sample does not become a rate.",
+    "purpose.memory": "Compact a lesson so later responsibilities stay small.",
+    "purpose.guardian": "Keep delegation limits and the manual trade boundary intact.",
     "memory.conversation": "Last request:",
     "memory.buy": "buy",
     "memory.sell": "sell",
@@ -284,6 +298,17 @@ const COPY = {
     "memory.zones": "آخر مناطق:",
     "memory.plans": "خطط مفتوحة:",
     "memory.risk": "درجة الخطة:",
+    "purpose.marketWatcher": "يراقب الذهب للتغيّر المهم دون استدعاء نموذج عند كل شمعة.",
+    "purpose.structure": "يقرأ التأرجح والاتجاه وكسور الهيكل من الشموع المغلقة.",
+    "purpose.liquidity": "يحدد القمم والقيعان المتساوية حيث ترجح وقوف الأوامر.",
+    "purpose.zones": "يعلّم مناطق العرض والطلب الناتجة عن اندفاع.",
+    "purpose.mtf": "يقارن الإطار العامل بقراءة أربع ساعات. العينة القصيرة تبقى غير مقروءة.",
+    "purpose.macro": "يقرأ التقويم الاقتصادي وعناوين الذهب. التغذية الفاشلة تبقى مجهولة.",
+    "purpose.risk":
+      "يقيس هدف الخطة المفتوحة الأول مقابل الوقف. السبريد غير المقروء ليس مكافأة صافية.",
+    "purpose.research": "يقارن لحظات ذهب مغلقة سابقة. العينة الصغيرة لا تصبح نسبة.",
+    "purpose.memory": "يختصر الدرس حتى تبقى المسؤوليات اللاحقة صغيرة.",
+    "purpose.guardian": "يحافظ على حدود التفويض وحد التنفيذ اليدوي.",
     "memory.conversation": "آخر طلب:",
     "memory.buy": "شراء",
     "memory.sell": "بيع",
