@@ -10,6 +10,7 @@ export type MemoryKind =
   | "preference"
   | "responsibility"
   | "market_observation"
+  | "structure_read"
   | "recommendation"
   | "historical_case"
   | "lesson"

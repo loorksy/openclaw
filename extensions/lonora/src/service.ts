@@ -17,7 +17,7 @@ import {
   type EconomicEvent,
 } from "./domain/calendar.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
-import { latestCandleShape } from "./domain/candlesticks.js";
+import { describeCandleShape, latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { latestOwnerText } from "./domain/conversation.js";
 import { copy, describeNotice, marketReasonCopy } from "./domain/copy.js";
@@ -39,11 +39,11 @@ import {
   type Observation,
 } from "./domain/monitor.js";
 import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
-import { classifySwingRange } from "./domain/patterns.js";
+import { classifySwingRange, describePattern } from "./domain/patterns.js";
 import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
-import { computeRangePosition } from "./domain/range-position.js";
+import { computeRangePosition, describeRange } from "./domain/range-position.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility, responsibilityEventText } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
@@ -272,6 +272,7 @@ export class LonoraService {
       GOLD_BAR_MS,
     );
     const liquidity = analyzeLiquidity(visible.candles);
+    this.noteStructure(visible.candles);
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
@@ -337,6 +338,7 @@ export class LonoraService {
       } else {
         const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
         candles = visible.candles as Candle[];
+        this.noteStructure(candles);
         this.lastDataStatus = visible.stale ? "stale" : "ok";
         this.lastDataError = visible.stale ? "Candle data is stale." : null;
         price = candles.at(-1)?.close ?? null;
@@ -623,7 +625,40 @@ export class LonoraService {
   }
 
   remember(kind: MemoryKind, content: string, symbol?: string) {
+    if (kind === "structure_read") {
+      return null;
+    }
     return this.store.addMemory({ kind, content, symbol });
+  }
+
+  /**
+   * One structure sentence from closed candles. A later read replaces it.
+   * An empty or failed read leaves the previous sentence in place.
+   */
+  private noteStructure(candles: Candle[]): void {
+    if (candles.length === 0) {
+      return;
+    }
+    const language = this.store.ensureLocalOwner().language;
+    const close = candles.at(-1)?.close ?? null;
+    const prior = priorGoldDay(candles);
+    const shape = latestCandleShape(candles);
+    const range = computeRangePosition(candles, close);
+    const text = [
+      range ? describeRange(language, range) : "",
+      prior ? `${copy(language, "structure.prior")} ${prior.low}–${prior.high}` : "",
+      describePattern(classifySwingRange(candles), language),
+      shape ? describeCandleShape(shape, language) : "",
+    ]
+      .filter((part) => part.length > 0)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+    if (!text) {
+      return;
+    }
+    this.store.replaceMemory("structure_read", "XAUUSD", text);
   }
 
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
@@ -654,6 +689,7 @@ export class LonoraService {
     const scenario = this.store.listRecentMemory("scenario", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
+    const structure = this.store.listRecentMemory("structure_read", 1);
     const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
@@ -667,6 +703,7 @@ export class LonoraService {
       scenario.length === 0 &&
       lessons.length === 0 &&
       observation.length === 0 &&
+      structure.length === 0 &&
       conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
@@ -679,6 +716,9 @@ export class LonoraService {
     }
     if (observation[0]) {
       lines.push(`${copy(language, "memory.observation")} ${observation[0].content}`);
+    }
+    if (structure[0]) {
+      lines.push(`${copy(language, "memory.structure")} ${structure[0].content}`);
     }
     if (conversation[0]) {
       lines.push(`${copy(language, "memory.conversation")} ${conversation[0].content}`);

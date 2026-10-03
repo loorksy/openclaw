@@ -24,6 +24,16 @@ import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
 
+function hourlyCloses(now: number, closes: number[]): Candle[] {
+  return closes.map((close, index) => ({
+    time: now - (closes.length - index) * 3_600_000,
+    open: close,
+    high: close + 1,
+    low: close - 1,
+    close,
+  }));
+}
+
 function risingCandles(count: number, start = 2300): Candle[] {
   return Array.from({ length: count }, (_, index) => {
     const close = start + index;
@@ -1042,6 +1052,80 @@ describe("market data", () => {
     expect(read.invented).toBe(false);
     expect(read.candles.map((candle) => candle.close)).toEqual([2305]);
     expect(read.pattern).toMatchObject({ stage: "unclassified", inventedTarget: false });
+    store.close();
+  });
+
+  it("keeps the latest closed-candle structure in the gold brief", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    const nearLow = hourlyCloses(openAt, [...Array.from({ length: 21 }, () => 120), 101]);
+    const nearHigh = hourlyCloses(openAt, [...Array.from({ length: 21 }, () => 120), 140]);
+    service.readCandles = async () => ({
+      ok: true,
+      candles: nearLow,
+      price: 101,
+      stale: false,
+      invented: false,
+    });
+
+    const closed = await service.monitorOnce(closedAt);
+    expect(closed.dataStatus).toBe("closed");
+    expect(service.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(service.recall("100", "structure_read")).toEqual([]);
+
+    await service.monitorOnce(openAt);
+    expect(service.ownerBrief()).toContain("Latest structure: Price is near the low of 100–121");
+    expect(service.ownerBrief()).not.toMatch(/%/);
+    expect(service.recall("near the low", "structure_read")).toHaveLength(1);
+    expect(service.remember("structure_read", "invented target 9999", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief()).not.toContain("9999");
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: nearHigh,
+      price: 140,
+      stale: false,
+      invented: false,
+    });
+    const replaced = await service.readVisibleCandles(openAt);
+    expect(replaced.invented).toBe(false);
+    expect(replaced.range).toMatchObject({
+      label: "near_high",
+      low: 119,
+      high: 141,
+      invented: false,
+    });
+    expect(service.ownerBrief()).toContain("Price is near the high of 119–141");
+    expect(service.ownerBrief()).not.toContain("near the low");
+    expect(service.recall("near the high", "structure_read")).toHaveLength(1);
+
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.readVisibleCandles(openAt);
+    expect(failed.ok).toBe(false);
+    expect(failed.invented).toBe(false);
+    expect(service.ownerBrief()).toContain("Price is near the high of 119–141");
+
+    store.setLanguage("ar");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: nearLow,
+      price: 101,
+      stale: false,
+      invented: false,
+    });
+    await service.readVisibleCandles(openAt);
+    expect(service.ownerBrief()).toContain("آخر قراءة: السعر قرب قاع النطاق 100–121");
+    expect(service.ownerBrief()).not.toContain("Latest structure:");
+    expect(service.ownerBrief()).not.toMatch(/%/);
     store.close();
   });
 
