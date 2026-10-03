@@ -45,6 +45,6 @@ A material notice is sent through the gateway message tool to the bound Telegram
 1. Audit and this map.
 2. Lonora plugin: owner, tools, recommendations, memory, specialists, migration.
 3. Owner navigation, four providers, Telegram-only channel list, trading welcome prompts.
-4. Market and recommendation pages bound to gateway methods.
+4. Market and recommendation pages bound to gateway methods. Market headings follow the owner language on the snapshot. A blank heading falls back to the English catalog.
 5. Tasks, Agents, and Usage & Cost read Lonora responsibilities, specialists, and cost rollups. Settings opens a four-provider connection page. An accepted key is saved with `models.authSetApiKey`. A rejected key is not. The older automations, agent, usage, and model-provider screens stay registered for direct links.
 6. Tests, docs, and upstream notes.
