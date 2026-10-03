@@ -643,6 +643,10 @@ export class LonoraService {
     const scenario = this.store.listRecentMemory("scenario", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
+    const plans = this.store
+      .listRecommendations()
+      .filter((plan) => plan.outcome === "pending")
+      .slice(0, 2);
     const tasks = this.store
       .listResponsibilities()
       .filter((row) => row.status === "running" || row.status === "scheduled")
@@ -651,6 +655,7 @@ export class LonoraService {
       scenario.length === 0 &&
       lessons.length === 0 &&
       observation.length === 0 &&
+      plans.length === 0 &&
       tasks.length === 0
     ) {
       return copy(language, "memory.empty");
@@ -665,6 +670,11 @@ export class LonoraService {
     if (lessons.length > 0) {
       lines.push(
         `${copy(language, "memory.lessons")} ${lessons.map((row) => row.content).join(" ")}`,
+      );
+    }
+    if (plans.length > 0) {
+      lines.push(
+        `${copy(language, "memory.plans")} ${plans.map((plan) => planLine(language, plan)).join("; ")}`,
       );
     }
     if (tasks.length > 0) {
@@ -934,6 +944,15 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
   }
   const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
   return ruleText ? `${ruleText} ${bandText}` : bandText;
+}
+
+function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
+  const side = copy(language, plan.direction === "sell" ? "memory.sell" : "memory.buy");
+  const target = plan.targets.find((level) => Number.isFinite(level));
+  const levels = `${copy(language, "memory.planStop")} ${plan.stopLoss}`;
+  return target == null
+    ? `${side} ${plan.entry}, ${levels}`
+    : `${side} ${plan.entry}, ${levels}, ${copy(language, "memory.planTarget")} ${target}`;
 }
 
 function purposeFor(agent: SpecialistId): string {

@@ -518,6 +518,14 @@ describe("responsibilities, memory, usage", () => {
     expect(blank.summary).toBe(copy("en", "memory.none"));
     expect(empty.recall("lesson", "lesson")).toEqual([]);
     expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    empty.saveRecommendation(plan({ id: "closed-plan", outcome: "loss", status: "sl_hit" }));
+    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    empty.saveRecommendation(
+      plan({ id: "open-plan", entry: 2311, stopLoss: 2291, targets: [2400] }),
+    );
+    expect(empty.ownerBrief()).toContain("Open plans: buy 2311, stop 2291, target 2400");
+    expect(empty.ownerBrief()).not.toMatch(/%/);
+    expect(empty.ownerBrief()).not.toContain("closed-plan");
     const note = `New York continuation   ${"x".repeat(400)}`;
     const stored = empty.delegate({ agent: "memory-curator", note });
     expect(stored.summary).toBe(copy("en", "memory.stored"));
@@ -535,6 +543,7 @@ describe("responsibilities, memory, usage", () => {
       copy("ar", "memory.stored"),
     );
     expect(empty.ownerBrief()).toContain("الدرس العربي");
+    expect(empty.ownerBrief()).toContain("خطط مفتوحة: شراء 2311, وقف 2291, هدف 2400");
     empty.store.close();
     second.store.close();
   });
