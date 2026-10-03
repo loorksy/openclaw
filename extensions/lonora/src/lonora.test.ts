@@ -523,6 +523,19 @@ describe("responsibilities, memory, usage", () => {
     empty.saveRecommendation(
       plan({ id: "open-plan", entry: 2311, stopLoss: 2291, targets: [2400] }),
     );
+    expect(empty.noteConversation([])).toBeNull();
+    expect(
+      empty.noteConversation([
+        { role: "assistant", content: "The model thought about a secret stop." },
+        { role: "user", content: [{ type: "text", text: "  What changed\nin gold?  " }] },
+      ]),
+    ).toBe("What changed in gold?");
+    expect(empty.ownerBrief()).toContain("Last request: What changed in gold?");
+    expect(empty.ownerBrief()).not.toContain("secret stop");
+    expect(
+      empty.noteConversation([{ role: "user", content: `Next ${"y".repeat(300)}` }])?.length,
+    ).toBe(240);
+    expect(empty.recall("What changed", "conversation")).toEqual([]);
     expect(empty.ownerBrief()).toContain("Open plans: buy 2311, stop 2291, target 2400");
     expect(empty.ownerBrief()).not.toMatch(/%/);
     expect(empty.ownerBrief()).not.toContain("closed-plan");
@@ -544,6 +557,7 @@ describe("responsibilities, memory, usage", () => {
     );
     expect(empty.ownerBrief()).toContain("الدرس العربي");
     expect(empty.ownerBrief()).toContain("خطط مفتوحة: شراء 2311, وقف 2291, هدف 2400");
+    expect(empty.ownerBrief()).toContain("آخر طلب: Next");
     empty.store.close();
     second.store.close();
   });

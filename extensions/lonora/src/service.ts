@@ -19,6 +19,7 @@ import {
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
+import { latestOwnerText } from "./domain/conversation.js";
 import { copy, describeNotice, marketReasonCopy } from "./domain/copy.js";
 import { tradableRetestBand } from "./domain/fill.js";
 import {
@@ -625,6 +626,16 @@ export class LonoraService {
     return this.store.addMemory({ kind, content, symbol });
   }
 
+  /** One rolling owner request. Assistant text and an empty turn are not stored. */
+  noteConversation(messages: readonly unknown[]): string | null {
+    const text = latestOwnerText(messages);
+    if (!text) {
+      return null;
+    }
+    this.store.replaceMemory("conversation", "XAUUSD", text);
+    return text;
+  }
+
   recall(query: string, kind?: MemoryKind) {
     return this.store.searchMemory(query, kind);
   }
@@ -643,6 +654,7 @@ export class LonoraService {
     const scenario = this.store.listRecentMemory("scenario", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
+    const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
       .filter((plan) => plan.outcome === "pending")
@@ -655,6 +667,7 @@ export class LonoraService {
       scenario.length === 0 &&
       lessons.length === 0 &&
       observation.length === 0 &&
+      conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
     ) {
@@ -666,6 +679,9 @@ export class LonoraService {
     }
     if (observation[0]) {
       lines.push(`${copy(language, "memory.observation")} ${observation[0].content}`);
+    }
+    if (conversation[0]) {
+      lines.push(`${copy(language, "memory.conversation")} ${conversation[0].content}`);
     }
     if (lessons.length > 0) {
       lines.push(

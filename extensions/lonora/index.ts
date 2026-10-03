@@ -132,6 +132,14 @@ export default definePluginEntry({
       toolsAllow: [...LONORA_TOOL_ALLOW],
     }));
 
+    api.on("agent_end", (event) => {
+      if (!service) {
+        return;
+      }
+      const messages = (event as { messages?: unknown }).messages;
+      service.noteConversation(Array.isArray(messages) ? messages : []);
+    });
+
     api.on("llm_output", (event, ctx) => {
       if (!service) {
         return;
