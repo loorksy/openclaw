@@ -19,7 +19,7 @@ import { describeRestingLiquidity, restingLiquidity } from "./liquidity-sweeps.j
 import { priorGoldDay } from "./market.js";
 import type { OwnerLanguage } from "./owner.js";
 import { classifySwingRange, describePattern } from "./patterns.js";
-import { describeNearestZones, nearestGoldZones } from "./plan.js";
+import { describeNearestZones, higherTimeframeBias, nearestGoldZones } from "./plan.js";
 import { computeRangePosition, describeRange } from "./range-position.js";
 import {
   describeStructureBreak,
@@ -190,22 +190,42 @@ export function runSupplyDemandAnalyst(
 
 export function runMultiTimeframeAnalyst(input: {
   lower: Candle[];
-  higher: Candle[];
+  higher?: Candle[];
+  language?: OwnerLanguage;
 }): SpecialistResult {
-  const lower = runStructureAnalyst(input.lower);
-  const higherBias = biasFromCandles(input.higher);
+  const language = input.language ?? "en";
+  const lower = runStructureAnalyst(input.lower, language);
   if (!lower.ok) {
     return { ...lower, agent: "multi-timeframe-analyst" };
   }
+  const higherBias =
+    input.higher && input.higher.length > 0
+      ? biasFromCandles(input.higher)
+      : higherTimeframeBias(input.lower);
+  const trend = lower.data.trend;
+  if (higherBias !== "bullish" && higherBias !== "bearish") {
+    return {
+      agent: "multi-timeframe-analyst",
+      ok: true,
+      summary: copy(language, "plan.htfUnknown"),
+      data: { lower: lower.data, higherBias, aligned: null },
+    };
+  }
+  if (trend !== "uptrend" && trend !== "downtrend") {
+    return {
+      agent: "multi-timeframe-analyst",
+      ok: true,
+      summary: copy(language, "mtf.trendUnread"),
+      data: { lower: lower.data, higherBias, aligned: null },
+    };
+  }
   const aligned =
-    (lower.data.trend === "uptrend" && higherBias === "bullish") ||
-    (lower.data.trend === "downtrend" && higherBias === "bearish");
+    (trend === "uptrend" && higherBias === "bullish") ||
+    (trend === "downtrend" && higherBias === "bearish");
   return {
     agent: "multi-timeframe-analyst",
     ok: true,
-    summary: aligned
-      ? `Lower timeframe ${String(lower.data.trend)} agrees with higher timeframe ${higherBias}`
-      : `Lower timeframe ${String(lower.data.trend)} does not agree with higher timeframe ${higherBias}`,
+    summary: `${describeTrend(language, trend)}. ${copy(language, higherBias === "bullish" ? "mtf.bullish" : "mtf.bearish")} ${copy(language, aligned ? "mtf.aligned" : "mtf.conflict")}`,
     data: { lower: lower.data, higherBias, aligned },
   };
 }
@@ -261,6 +281,7 @@ export function runSpecialist(
     calendarKnown?: boolean;
     headlines?: NewsHeadline[];
     headlinesKnown?: boolean;
+    marketKnown?: boolean;
     language?: OwnerLanguage;
     guardian?: GuardianFacts;
   },
@@ -277,9 +298,20 @@ export function runSpecialist(
     case "supply-demand-analyst":
       return runSupplyDemandAnalyst(input.candles ?? [], input.language ?? "en");
     case "multi-timeframe-analyst":
+      if (input.marketKnown === false) {
+        const language = input.language ?? "en";
+        return {
+          agent: id,
+          ok: false,
+          summary: copy(language, "plan.htfUnknown"),
+          data: { higherBias: "unknown", aligned: null },
+          failure: "market_unavailable",
+        };
+      }
       return runMultiTimeframeAnalyst({
         lower: input.candles ?? [],
-        higher: input.higher ?? [],
+        higher: input.higher,
+        language: input.language ?? "en",
       });
     case "risk-reviewer":
       return runRiskReviewer({

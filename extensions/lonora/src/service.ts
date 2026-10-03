@@ -588,6 +588,21 @@ export class LonoraService {
     return { ok: true as const, indexed: added, invented: false as const, ...report };
   }
 
+  async compareTimeframes(now = Date.now()) {
+    const read = await this.readCandles(120);
+    if (!read.ok) {
+      return this.delegate({
+        agent: "multi-timeframe-analyst",
+        marketKnown: false,
+      });
+    }
+    const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
+    return this.delegate({
+      agent: "multi-timeframe-analyst",
+      candles: visible.candles.filter((candle) => isSaneCandle(candle)),
+    });
+  }
+
   async compareSimilarHistory(input?: { enforceDelegation?: boolean; now?: number }) {
     if (input?.enforceDelegation) {
       try {
@@ -872,6 +887,7 @@ export class LonoraService {
     calendarKnown?: boolean;
     headlines?: NewsHeadline[];
     headlinesKnown?: boolean;
+    marketKnown?: boolean;
     depth?: number;
     childCount?: number;
     parentRunId?: string;

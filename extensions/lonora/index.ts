@@ -382,6 +382,9 @@ export default definePluginEntry({
         if (agent === "research-agent") {
           return current.compareSimilarHistory({ enforceDelegation: true });
         }
+        if (agent === "multi-timeframe-analyst") {
+          return current.compareTimeframes();
+        }
         return current.delegate({
           agent,
           candles: params.candles as Candle[] | undefined,

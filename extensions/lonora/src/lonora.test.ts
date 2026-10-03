@@ -170,6 +170,54 @@ describe("structure", () => {
     expect(short.summary).not.toContain("لا إغلاق جديد");
   });
 
+  it("keeps a short higher timeframe unread instead of calling it a disagreement", () => {
+    const closes = [100, 110, 140, 120, 105, 115, 160, 130, 112, 125, 190, 150, 128, 140, 145];
+    const candles = closes.map((close, index) => ({
+      time: 1_700_000_000_000 + index * 3_600_000,
+      open: close,
+      high: close + 1,
+      low: close - 1,
+      close,
+    }));
+    const unread = runSpecialist("multi-timeframe-analyst", { candles });
+    expect(unread.ok).toBe(true);
+    expect(unread.summary).toBe("The higher timeframe was not read.");
+    expect(unread.data.aligned).toBeNull();
+    expect(unread.summary).not.toMatch(/agree/i);
+    const higher = Array.from({ length: 20 }, (_, index) => {
+      const close = 100 + index * 2;
+      return {
+        time: index * 14_400_000,
+        open: close,
+        high: close + 1,
+        low: close - 1,
+        close,
+      };
+    });
+    const aligned = runSpecialist("multi-timeframe-analyst", { candles, higher });
+    expect(aligned.data.aligned).toBe(true);
+    expect(aligned.summary).toContain("Uptrend.");
+    expect(aligned.summary).toContain("The four-hour read is up.");
+    expect(aligned.summary).toContain("The working timeframe agrees with that read.");
+    const falling = higher.map((bar, index) => {
+      const close = 200 - index * 2;
+      return { ...bar, open: close, high: close + 1, low: close - 1, close };
+    });
+    const conflict = runSpecialist("multi-timeframe-analyst", { candles, higher: falling });
+    expect(conflict.data.aligned).toBe(false);
+    expect(conflict.summary).toContain("does not agree");
+    expect(conflict.summary).not.toContain("agrees with");
+    const arabic = runSpecialist("multi-timeframe-analyst", {
+      candles,
+      higher,
+      language: "ar",
+    });
+    expect(arabic.summary).toContain("اتجاه صاعد");
+    expect(arabic.summary).toContain("قراءة أربع ساعات صاعدة");
+    expect(arabic.summary).toContain("يوافق هذه القراءة");
+    expect(arabic.summary).not.toContain("Uptrend");
+  });
+
   it("reports a buy-side sweep from the closed candles", () => {
     const candles = [
       ...Array.from({ length: 8 }, (_, index) => ({
@@ -1095,6 +1143,29 @@ describe("delegation and migration", () => {
 });
 
 describe("market data", () => {
+  it("reads the higher timeframe from the candle feed", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.compareTimeframes(openAt);
+    expect(failed.ok).toBe(false);
+    expect(failed.summary).toBe("The higher timeframe was not read.");
+    expect(failed.summary).not.toMatch(/agree/i);
+    store.setLanguage("ar");
+    const arabic = await service.compareTimeframes(openAt);
+    expect(arabic.summary).toBe("الإطار الزمني الأعلى لم يُقرأ.");
+    expect(arabic.summary).not.toContain("was not read");
+    store.close();
+  });
+
   it("reports unavailable candles instead of inventing a quote", async () => {
     const previous = process.env.OANDA_API_TOKEN;
     delete process.env.OANDA_API_TOKEN;
