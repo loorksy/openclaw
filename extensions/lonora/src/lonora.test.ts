@@ -700,6 +700,34 @@ describe("delegation and migration", () => {
     expect(burst.recall("one more", "lesson")).toEqual([]);
     expect(burst.recall("lesson 0", "lesson")).toHaveLength(1);
     burst.store.close();
+    const guardian = new LonoraService(LonoraStore.open(":memory:"));
+    const checked = guardian.delegate({ agent: "system-guardian" });
+    expect(checked.ok).toBe(true);
+    expect(checked.summary).toContain("Specialist runs in the last minute: 0.");
+    expect(checked.summary).toContain("The cap is 4.");
+    expect(checked.summary).toContain("Model trade is blocked.");
+    expect(checked.summary).toContain("not linked to a broker.");
+    expect(checked.summary).toContain("Coding tools stay blocked.");
+    expect(checked.summary).not.toMatch(/Checked delegation/);
+    expect(runSpecialist("system-guardian", {}).failure).toBe("unchecked");
+    const broken = runSpecialist("system-guardian", {
+      guardian: {
+        childCount: 0,
+        maxChildren: 4,
+        modelTradeBlocked: false,
+        ownerBrokerCalled: false,
+        codingBlocked: true,
+      },
+    });
+    expect(broken.ok).toBe(false);
+    expect(broken.failure).toBe("boundary");
+    expect(broken.summary).toBe(copy("en", "guardian.failed"));
+    guardian.store.setLanguage("ar");
+    const second = guardian.delegate({ agent: "system-guardian" });
+    expect(second.summary).toContain("1");
+    expect(second.summary).toContain("تنفيذ النموذج محظور");
+    expect(second.summary).not.toContain("Model trade is blocked.");
+    guardian.store.close();
     store.close();
   });
 

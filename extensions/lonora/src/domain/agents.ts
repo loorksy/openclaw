@@ -60,11 +60,21 @@ export const DEFAULT_LIMITS: DelegationLimits = {
   tokenBudget: 4_000,
 };
 
+export const MAX_CHILD_RUNS = 4;
+
+export interface GuardianFacts {
+  childCount: number;
+  maxChildren: number;
+  modelTradeBlocked: boolean;
+  ownerBrokerCalled: boolean;
+  codingBlocked: boolean;
+}
+
 export function assertDelegation(input: DelegationLimits & { requested: number }): void {
   if (input.depth >= 2) {
     throw new Error("Delegation depth exceeded. Specialists cannot spawn further agents.");
   }
-  if (input.childCount + input.requested > 4) {
+  if (input.childCount + input.requested > MAX_CHILD_RUNS) {
     throw new Error("Child agent limit exceeded.");
   }
   if (input.tokenBudget <= 0) {
@@ -213,6 +223,19 @@ export function runRiskReviewer(input: {
   };
 }
 
+export function describeGuardian(facts: GuardianFacts, language: OwnerLanguage): string {
+  if (!facts.modelTradeBlocked || facts.ownerBrokerCalled || !facts.codingBlocked) {
+    return copy(language, "guardian.failed");
+  }
+  return [
+    `${copy(language, "guardian.runs")} ${facts.childCount}.`,
+    `${copy(language, "guardian.cap")} ${facts.maxChildren}.`,
+    copy(language, "guardian.tradeBlocked"),
+    copy(language, "guardian.broker"),
+    copy(language, "guardian.coding"),
+  ].join(" ");
+}
+
 export function runSpecialist(
   id: SpecialistId,
   input: {
@@ -227,6 +250,7 @@ export function runSpecialist(
     headlines?: NewsHeadline[];
     headlinesKnown?: boolean;
     language?: OwnerLanguage;
+    guardian?: GuardianFacts;
   },
 ): SpecialistResult {
   switch (id) {
@@ -310,17 +334,31 @@ export function runSpecialist(
         data: { lesson: lesson || null },
       };
     }
-    case "system-guardian":
+    case "system-guardian": {
+      const language = input.language ?? "en";
+      const facts = input.guardian;
+      if (!facts) {
+        return {
+          agent: id,
+          ok: false,
+          summary: copy(language, "guardian.unchecked"),
+          data: {},
+          failure: "unchecked",
+        };
+      }
+      const intact =
+        facts.modelTradeBlocked &&
+        !facts.ownerBrokerCalled &&
+        facts.codingBlocked &&
+        facts.childCount < facts.maxChildren;
       return {
         agent: id,
-        ok: true,
-        summary: "Checked delegation limits and the trade-execution boundary.",
-        data: {
-          tradeExecution: "owner-confirmed-only",
-          maxDepth: 1,
-          maxChildren: 4,
-        },
+        ok: intact,
+        summary: describeGuardian(facts, language),
+        data: { ...facts },
+        ...(intact ? {} : { failure: "boundary" }),
       };
+    }
     default:
       return {
         agent: id,

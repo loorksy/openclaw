@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { describeActivationRule, parseActivationRule } from "./domain/activation-rule.js";
 import {
   assertDelegation,
+  MAX_CHILD_RUNS,
   runSpecialist,
   runStructureAnalyst,
   SPECIALISTS,
+  type GuardianFacts,
   type SpecialistId,
 } from "./domain/agents.js";
 import {
@@ -37,7 +39,7 @@ import {
 } from "./domain/monitor.js";
 import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
 import { classifySwingRange } from "./domain/patterns.js";
-import { assertPermission, authorizeTrade } from "./domain/permissions.js";
+import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { computeRangePosition } from "./domain/range-position.js";
@@ -745,6 +747,12 @@ export class LonoraService {
       ...input,
       note,
       language,
+      guardian:
+        input.agent === "system-guardian"
+          ? this.guardianFacts(
+              input.childCount ?? this.store.countAgentRunsSince(Date.now() - DELEGATION_WINDOW_MS),
+            )
+          : undefined,
     });
     const lesson =
       input.agent === "memory-curator" && result.ok && typeof result.data.lesson === "string"
@@ -853,6 +861,18 @@ export class LonoraService {
         configured: known.has(provider),
       };
     });
+  }
+
+  private guardianFacts(childCount: number): GuardianFacts {
+    const modelTrade = this.confirmTrade({ caller: "model", ownerConfirmed: true });
+    const ownerTrade = this.confirmTrade({ caller: "owner", ownerConfirmed: true });
+    return {
+      childCount,
+      maxChildren: MAX_CHILD_RUNS,
+      modelTradeBlocked: !modelTrade.ok && modelTrade.brokerCalled === false,
+      ownerBrokerCalled: ownerTrade.brokerCalled,
+      codingBlocked: blockReasonForTool({ toolName: "exec", ownerConfirmed: true }) != null,
+    };
   }
 
   confirmTrade(input: {
