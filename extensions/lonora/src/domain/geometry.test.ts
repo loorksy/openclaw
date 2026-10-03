@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "./candles.js";
 import { applyStopDistanceFloor, placeProtectedStop, stopBuffer } from "./geometry.js";
-import { prepareGoldPlan } from "./plan.js";
+import { analyzePathToEntry, prepareGoldPlan, selectStructuralTargets } from "./plan.js";
 
 function bar(index: number, open: number, high: number, low: number, close: number): Candle {
   return { time: 1_700_000_000_000 + index * 3_600_000, open, high, low, close };
@@ -70,9 +70,63 @@ describe("prepare gold plan", () => {
     expect(prepared.plan.direction).toBe("buy");
     expect(prepared.plan.stopLoss).toBeLessThan(2296);
     expect(prepared.plan.targets[0]).toBeGreaterThan(prepared.plan.entry);
+    expect(prepared.plan.targets.length).toBeLessThanOrEqual(3);
+    expect(prepared.plan.rationale).toContain("Structural targets");
     expect(prepared.plan.outcome).toBe("pending");
     expect(prepared.plan.rationale).toContain("2296");
     expect(prepared.plan.rationale).toMatch(/Zone grade [AB]/);
+  });
+
+  it("keeps only structural targets past the span floor", () => {
+    expect(
+      selectStructuralTargets({
+        action: "buy",
+        entry: 2300,
+        atr: 2,
+        levels: [2304, 2320, 2360, 2400],
+      }),
+    ).toEqual([2320, 2360, 2400]);
+    expect(
+      selectStructuralTargets({
+        action: "buy",
+        entry: 2300,
+        atr: 10,
+        levels: [2305, 2312],
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not turn distance into a trade the other way", () => {
+    const broken = analyzePathToEntry({
+      action: "buy",
+      currentPrice: 2280,
+      entry: 2300,
+      atr: 8,
+      zoneLow: 2290,
+      zoneHigh: 2300,
+    });
+    expect(broken.class).toBe("invalidated_before_activation");
+    expect(broken.transitionalTrade).toBe(false);
+    const away = analyzePathToEntry({
+      action: "sell",
+      currentPrice: 2280,
+      entry: 2320,
+      atr: 8,
+      zoneLow: 2310,
+      zoneHigh: 2330,
+    });
+    expect(away.class).toBe("unlikely_reach");
+    expect(away.transitionalTrade).toBe(false);
+    const waiting = analyzePathToEntry({
+      action: "buy",
+      currentPrice: 2310,
+      entry: 2300,
+      atr: 8,
+      zoneLow: 2290,
+      zoneHigh: 2302,
+    });
+    expect(waiting.class).toBe("neutral_path");
+    expect(waiting.transitionalTrade).toBe(false);
   });
 
   it("does not invent a plan when the candle sample is too short", () => {

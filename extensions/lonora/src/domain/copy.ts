@@ -33,6 +33,12 @@ const COPY = {
     "plan.stopBeyond": "Stop sits beyond the structural level",
     "plan.widened": "The distance floor pushed it farther out.",
     "plan.grade": "Zone grade",
+    "plan.targets": "Structural targets",
+    "plan.pathBroken": "Price already broke the entry zone, so no plan was prepared.",
+    "plan.pathUnlikely":
+      "Price is moving away from the pending zone. This is not a trade in the other direction.",
+    "plan.pathNeutral":
+      "The idea waits for price to return to the zone. The path is not a trade the other way.",
     "cases.insufficient": "Closed history is too short to compare with earlier gold moments.",
     "cases.none": "No earlier gold moment is similar enough to count.",
     "cases.counts": "Similar moments are too few for a rate",
@@ -71,6 +77,10 @@ const COPY = {
     "plan.stopBeyond": "الوقف يقع بعد المستوى الهيكلي",
     "plan.widened": "حد المسافة دفعه أبعد.",
     "plan.grade": "درجة المنطقة",
+    "plan.targets": "أهداف هيكلية",
+    "plan.pathBroken": "السعر اخترق منطقة الدخول، لذلك لم تُجهَّز خطة.",
+    "plan.pathUnlikely": "السعر يبتعد عن المنطقة المعلقة. هذا ليس صفقة في الاتجاه المعاكس.",
+    "plan.pathNeutral": "الفكرة تنتظر عودة السعر إلى المنطقة. المسار ليس صفقة في الاتجاه المعاكس.",
     "cases.insufficient": "التاريخ المغلق أقصر من أن يُقارن بلحظات ذهب سابقة.",
     "cases.none": "لا توجد لحظة ذهب سابقة قريبة بما يكفي.",
     "cases.counts": "اللحظات المتشابهة أقل من أن تُنتج نسبة",
