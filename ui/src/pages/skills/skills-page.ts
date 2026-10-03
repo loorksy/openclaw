@@ -465,30 +465,7 @@ class SkillsPage extends OpenClawLightDomElement {
                     ${renderSkillLibraryFeedback(this.library)}
                     ${renderSkillLibraryDialogs(this.library)}
                   `
-                : renderSkillLibrary(
-                    this.library,
-                    html`
-                      <button
-                        type="button"
-                        class="btn"
-                        @click=${() =>
-                          this.context.navigate("skills", {
-                            search: this.skillsAgentId
-                              ? `?agent=${encodeURIComponent(this.skillsAgentId)}`
-                              : "",
-                          })}
-                      >
-                        ${icons.search} ${t("skillDiscovery.search")}
-                      </button>
-                      <button
-                        type="button"
-                        class="btn"
-                        @click=${() => this.context.navigate("skill-workshop")}
-                      >
-                        ${t("pluginsPage.workshopTab")}
-                      </button>
-                    `,
-                  ),
+                : renderSkillLibrary(this.library, html``),
             showInventory: this.library.showWorkspace,
             canUpdate: this.canUpdateSkills(),
             canInstall: this.canInstallFromClawHub(),
