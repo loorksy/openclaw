@@ -359,6 +359,12 @@ function namedPatternLabel(kind: string) {
   if (kind === "double_bottom") {
     return t("lonora.market.patternDoubleBottom");
   }
+  if (kind === "head_and_shoulders") {
+    return t("lonora.market.patternHeadShoulders");
+  }
+  if (kind === "inverse_head_and_shoulders") {
+    return t("lonora.market.patternInverseHeadShoulders");
+  }
   return "";
 }
 

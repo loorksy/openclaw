@@ -4816,6 +4816,8 @@ export const en: TranslationMap & {
       patternFailed: "The swing range failed.",
       patternDoubleTop: "Double top",
       patternDoubleBottom: "Double bottom",
+      patternHeadShoulders: "Head and shoulders",
+      patternInverseHeadShoulders: "Inverse head and shoulders",
       activeRecommendations: "Active recommendations",
       noRecommendations: "No active recommendations.",
       responsibilities: "Market responsibilities",

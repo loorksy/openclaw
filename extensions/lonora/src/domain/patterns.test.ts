@@ -131,7 +131,72 @@ describe("swing range stage", () => {
     expect(failed.named?.stage).toBe("failed");
     expect(failed.named?.inventedTarget).toBe(false);
   });
+
+  it("names a head and shoulders only after a close through the neckline", () => {
+    const candles = headAndShoulders();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "head_and_shoulders",
+      neckline: 100,
+      extreme: 116,
+      inventedTarget: false,
+    });
+    expect(forming.named?.stage).not.toBe("completed_unconfirmed");
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Head and shoulders");
+    expect(describePattern(forming, "ar")).toContain("رأس وكتفان");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 104, 90, 103)]);
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.kind).toBe("head_and_shoulders");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 104, 96, 98)]);
+    expect(completed.named).toMatchObject({
+      kind: "head_and_shoulders",
+      stage: "completed_unconfirmed",
+      inventedTarget: false,
+    });
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 104, 96, 98),
+      bar(candles.length + 1, 104, 94, 96),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 122, 104, 120)]);
+    expect(failed.named).toMatchObject({
+      kind: "head_and_shoulders",
+      stage: "failed",
+      inventedTarget: false,
+    });
+  });
 });
+
+function headAndShoulders(): Candle[] {
+  const candles = Array.from({ length: 40 }, (_, index) => bar(index, 104.4, 103.6, 104));
+  const peak = (index: number, price: number) => {
+    candles[index] = bar(index, price, 103.6, price - 1);
+    candles[index - 1] = bar(index - 1, price - 2, 103.6, 104);
+    candles[index + 1] = bar(index + 1, price - 2, 103.6, 104);
+    candles[index - 2] = bar(index - 2, price - 2, 103.6, 104);
+    candles[index + 2] = bar(index + 2, price - 2, 103.6, 104);
+  };
+  const trough = (index: number) => {
+    candles[index] = bar(index, 104.2, 100, 102);
+    candles[index - 1] = bar(index - 1, 105, 103, 104);
+    candles[index + 1] = bar(index + 1, 105, 103, 104);
+    candles[index - 2] = bar(index - 2, 105, 103, 104);
+    candles[index + 2] = bar(index + 2, 105, 103, 104);
+  };
+  peak(8, 108);
+  trough(14);
+  peak(20, 116);
+  trough(26);
+  peak(32, 108);
+  return candles;
+}
 
 function doubleTop(): Candle[] {
   const candles = Array.from({ length: 28 }, (_, index) => bar(index, 104.5, 103.5, 104));

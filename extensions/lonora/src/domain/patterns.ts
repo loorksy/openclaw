@@ -43,7 +43,7 @@ export interface SwingRangePattern {
 }
 
 export interface NamedExtreme {
-  kind: "double_top" | "double_bottom";
+  kind: "double_top" | "double_bottom" | "head_and_shoulders" | "inverse_head_and_shoulders";
   stage: PatternStage;
   neckline: number;
   extreme: number;
@@ -64,9 +64,14 @@ const UNCLASSIFIED: SwingRangePattern = {
 const MAX_EXTREME_GAP_ATR = 0.4;
 const MIN_BAR_SEPARATION = 8;
 const MIN_HEIGHT_ATR = 0.5;
+const MIN_HEAD_PROMINENCE_ATR = 1.2;
+const MAX_SHOULDER_ASYMMETRY = 0.25;
 
 export function classifySwingRange(candles: Candle[]): SwingRangePattern {
-  return { ...classifyRange(candles), named: classifyDoubleExtreme(candles) };
+  return {
+    ...classifyRange(candles),
+    named: classifyHeadShoulders(candles) ?? classifyDoubleExtreme(candles),
+  };
 }
 
 function classifyRange(candles: Candle[]): Omit<SwingRangePattern, "named"> {
@@ -183,7 +188,16 @@ function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string
   if (!named || named.inventedTarget !== false) {
     return "";
   }
-  return copy(language, named.kind === "double_top" ? "pattern.doubleTop" : "pattern.doubleBottom");
+  switch (named.kind) {
+    case "double_top":
+      return copy(language, "pattern.doubleTop");
+    case "double_bottom":
+      return copy(language, "pattern.doubleBottom");
+    case "head_and_shoulders":
+      return copy(language, "pattern.headShoulders");
+    case "inverse_head_and_shoulders":
+      return copy(language, "pattern.inverseHeadShoulders");
+  }
 }
 
 function classifyDoubleExtreme(candles: Candle[]): NamedExtreme | null {
@@ -339,19 +353,146 @@ function resolveRange(input: {
 function firstCloseBeyond(
   candles: readonly Candle[],
   fromIndex: number,
-  level: number,
+  level: number | ((index: number) => number),
   direction: "up" | "down",
   atr: number,
 ): { breakIndex?: number } {
   const tolerance = Math.max(atr * BREAK_BUFFER_ATR, Number.EPSILON);
   for (let index = Math.max(0, fromIndex + 1); index < candles.length; index += 1) {
     const close = candles[index]!.close;
-    if (direction === "up" && close > level + tolerance) {
+    const line = typeof level === "function" ? level(index) : level;
+    if (!Number.isFinite(line)) {
+      continue;
+    }
+    if (direction === "up" && close > line + tolerance) {
       return { breakIndex: index };
     }
-    if (direction === "down" && close < level - tolerance) {
+    if (direction === "down" && close < line - tolerance) {
       return { breakIndex: index };
     }
   }
   return {};
+}
+
+function classifyHeadShoulders(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const swings = swingsWithIndex(candles);
+  const regular = scanHead(candles, swings, atr, false);
+  const inverse = scanHead(candles, swings, atr, true);
+  if (regular && inverse) {
+    return regular.rightIndex >= inverse.rightIndex ? regular.named : inverse.named;
+  }
+  return regular?.named ?? inverse?.named ?? null;
+}
+
+function scanHead(
+  candles: readonly Candle[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+  inverse: boolean,
+): { named: NamedExtreme; rightIndex: number } | null {
+  const peakKind = inverse ? "low" : "high";
+  for (let end = swings.length - 1; end >= 4; end -= 1) {
+    const window = swings.slice(end - 4, end + 1);
+    const [leftShoulder, leftNeck, head, rightNeck, rightShoulder] = window as [
+      Swing & { index: number },
+      Swing & { index: number },
+      Swing & { index: number },
+      Swing & { index: number },
+      Swing & { index: number },
+    ];
+    if (
+      leftShoulder.type !== peakKind ||
+      head.type !== peakKind ||
+      rightShoulder.type !== peakKind ||
+      leftNeck.type === peakKind ||
+      rightNeck.type === peakKind
+    ) {
+      continue;
+    }
+    const sign = inverse ? -1 : 1;
+    const prominence = Math.min(
+      sign * (head.price - leftShoulder.price),
+      sign * (head.price - rightShoulder.price),
+    );
+    if (prominence < MIN_HEAD_PROMINENCE_ATR * atr) {
+      continue;
+    }
+    const necklineAt = (index: number) => {
+      if (rightNeck.index === leftNeck.index) {
+        return rightNeck.price;
+      }
+      const slope = (rightNeck.price - leftNeck.price) / (rightNeck.index - leftNeck.index);
+      return leftNeck.price + slope * (index - leftNeck.index);
+    };
+    const headHeight = Math.abs(head.price - necklineAt(head.index));
+    if (!(headHeight > 0)) {
+      continue;
+    }
+    if (Math.abs(leftShoulder.price - rightShoulder.price) > headHeight * MAX_SHOULDER_ASYMMETRY) {
+      continue;
+    }
+    const breakDirection = inverse ? "up" : "down";
+    const completion = firstCloseBeyond(
+      candles,
+      rightShoulder.index,
+      necklineAt,
+      breakDirection,
+      atr,
+    );
+    const invalidation = firstCloseBeyond(
+      candles,
+      rightShoulder.index,
+      head.price,
+      inverse ? "down" : "up",
+      atr,
+    );
+    const invalidatedFirst =
+      invalidation.breakIndex != null &&
+      (completion.breakIndex == null || invalidation.breakIndex < completion.breakIndex);
+    const completed = completion.breakIndex != null && !invalidatedFirst;
+    const neckline = rightNeck.price;
+    let stage: PatternStage;
+    if (invalidatedFirst) {
+      stage = "failed";
+    } else if (completed && completion.breakIndex != null) {
+      const breakLevel = necklineAt(completion.breakIndex);
+      const confirmed = candles
+        .slice(completion.breakIndex + 1)
+        .some((candle) => Math.abs(candle.close - breakLevel) > atr * CONFIRMATION_ATR);
+      stage = confirmed ? "confirmed" : "completed_unconfirmed";
+    } else {
+      const lastClose = candles.at(-1)?.close ?? neckline;
+      const distanceAtr = Math.abs(lastClose - necklineAt(candles.length - 1)) / atr;
+      const proximity = Math.max(0, Math.min(1, 1 - distanceAtr / 2));
+      const ratio = Math.max(0.45, proximity * 0.9);
+      stage = ratio < 0.75 ? "forming" : "near_completion";
+    }
+    return {
+      rightIndex: rightShoulder.index,
+      named: {
+        kind: inverse ? "inverse_head_and_shoulders" : "head_and_shoulders",
+        stage,
+        neckline,
+        extreme: head.price,
+        inventedTarget: false,
+      },
+    };
+  }
+  return null;
+}
+
+function swingsWithIndex(candles: readonly Candle[]): (Swing & { index: number })[] {
+  return detectSwings(candles)
+    .map((swing) => ({
+      ...swing,
+      index: candles.findIndex((candle) => candle.time === swing.time),
+    }))
+    .filter((swing) => swing.index >= 0);
 }

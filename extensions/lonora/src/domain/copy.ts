@@ -77,6 +77,8 @@ const COPY = {
     "pattern.failed": "The swing range failed.",
     "pattern.doubleTop": "Double top",
     "pattern.doubleBottom": "Double bottom",
+    "pattern.headShoulders": "Head and shoulders",
+    "pattern.inverseHeadShoulders": "Inverse head and shoulders",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -149,6 +151,8 @@ const COPY = {
     "pattern.failed": "فشل نطاق التأرجح.",
     "pattern.doubleTop": "قمة مزدوجة",
     "pattern.doubleBottom": "قاع مزدوج",
+    "pattern.headShoulders": "رأس وكتفان",
+    "pattern.inverseHeadShoulders": "رأس وكتفان مقلوبان",
   },
 } as const;
 
