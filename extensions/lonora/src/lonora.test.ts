@@ -405,6 +405,11 @@ describe("delegation and migration", () => {
       .run(10, 1, "EURUSD", "buy", 1.1, 1.0, "[1.2]", "fx", 40, "active");
     source
       .prepare(
+        "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(11, 1, "XAUUSD", "buy", 2300, 2290, "[2310]", "closed", 60, "sl_hit");
+    source
+      .prepare(
         "INSERT INTO semantic_memories (id, user_id, content, memory_type, symbol, archived) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .run(3, 1, "London open fade", "lesson", "XAUUSD", 0);
@@ -419,8 +424,17 @@ describe("delegation and migration", () => {
     expect(applied.language).toBe("ar");
     expect(target.getOwner()?.telegramChatId).toBe("555");
     expect(report.warnings.join(" ")).toMatch(/not XAUUSD/);
-    expect(target.listRecommendations()).toHaveLength(1);
+    expect(target.listRecommendations()).toHaveLength(2);
     expect(target.listRecommendations().every((plan) => plan.symbol === "XAUUSD")).toBe(true);
+    expect(target.listRecommendations().find((plan) => plan.id === "boty-11")?.outcome).toBe(
+      "loss",
+    );
+    new LonoraService(target).gradeRecommendations([
+      { time: Date.now() + 60_000, open: 2300, high: 2400, low: 2295, close: 2350 },
+    ]);
+    expect(target.listRecommendations().find((plan) => plan.id === "boty-11")?.outcome).toBe(
+      "loss",
+    );
     expect(target.listRecommendations()[0]?.createdCandleTime).toBeGreaterThan(0);
     expect(target.searchMemory("London")[0]?.kind).toBe("lesson");
     target.close();

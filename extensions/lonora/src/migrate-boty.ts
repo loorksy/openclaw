@@ -6,7 +6,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { isGoldSymbol } from "./domain/candles.js";
 import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js";
-import type { RecommendationPlan } from "./domain/recommendations.js";
+import type {
+  RecommendationOutcome,
+  RecommendationPlan,
+  RecommendationStatus,
+} from "./domain/recommendations.js";
 import { LonoraStore } from "./store.js";
 
 export interface MigrationReport {
@@ -111,6 +115,13 @@ export function planBotyMigration(input: {
         ) {
           continue;
         }
+        const lifecycle = importedLifecycle(row.status);
+        if (!lifecycle) {
+          report.warnings.push(
+            `Skipped recommendation ${row.id} with unrecognized status ${row.status}.`,
+          );
+          continue;
+        }
         const targets = parseTargets(row.targets_json);
         const createdAt = recommendationCreatedAt(source, row.id, importedAt);
         const plan: RecommendationPlan = {
@@ -121,8 +132,8 @@ export function planBotyMigration(input: {
           entry: row.entry,
           stopLoss: row.stop_loss,
           targets,
-          status: "pending_entry",
-          outcome: "pending",
+          status: lifecycle.status,
+          outcome: lifecycle.outcome,
           createdCandleTime: createdAt,
           createdAt,
           rationale: row.rationale ?? undefined,
@@ -142,6 +153,35 @@ export function planBotyMigration(input: {
     return report;
   } finally {
     source.close();
+  }
+}
+
+function importedLifecycle(
+  status: string,
+): { status: RecommendationStatus; outcome: RecommendationOutcome } | null {
+  switch (status) {
+    case "pending_entry":
+    case "active":
+    case "pending":
+      return { status: "pending_entry", outcome: "pending" };
+    case "triggered":
+      return { status: "triggered", outcome: "pending" };
+    case "tp1_hit":
+      return { status: "tp1_hit", outcome: "win_tp1" };
+    case "tp2_hit":
+      return { status: "tp2_hit", outcome: "win_tp2" };
+    case "tp3_hit":
+      return { status: "tp3_hit", outcome: "win_tp3" };
+    case "sl_hit":
+      return { status: "sl_hit", outcome: "loss" };
+    case "invalidated":
+      return { status: "invalidated", outcome: "invalidated" };
+    case "expired":
+      return { status: "expired", outcome: "expired" };
+    case "cancelled":
+      return { status: "cancelled", outcome: "cancelled" };
+    default:
+      return null;
   }
 }
 
