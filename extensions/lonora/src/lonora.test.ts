@@ -62,6 +62,30 @@ function impulseZones(now: number): Candle[] {
   return bars;
 }
 
+function breakCandles(mode: "close" | "wick" | "short"): Candle[] {
+  const count = mode === "short" ? 4 : 12;
+  return Array.from({ length: count }, (_, index) => {
+    const close = mode === "close" && index === 8 ? 111 : 100;
+    const high =
+      index === 4
+        ? 110
+        : mode === "wick" && index === 8
+          ? 113
+          : index === 8
+            ? 111
+            : index > 8
+              ? 112
+              : 101;
+    return {
+      time: 1_700_000_000_000 + index * 3_600_000,
+      open: 100,
+      high,
+      low: 99,
+      close,
+    };
+  });
+}
+
 function hourlyCloses(now: number, closes: number[]): Candle[] {
   return closes.map((close, index) => ({
     time: now - (closes.length - index) * 3_600_000,
@@ -1345,6 +1369,71 @@ describe("market data", () => {
     await service.readVisibleCandles(openAt);
     expect(service.ownerBrief()).toContain("الإطار الأعلى: اتجاه صاعد. قراءة أربع ساعات صاعدة.");
     expect(service.ownerBrief()).not.toContain("Higher timeframe:");
+    store.close();
+  });
+
+  it("names a close-confirmed break and leaves a wick or a short sample unread", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const now = Date.UTC(2026, 0, 14, 15, 0);
+    service.readCandles = async () => ({
+      ok: true,
+      candles: breakCandles("short"),
+      price: 100,
+      stale: false,
+      invented: false,
+    });
+    const short = await service.readVisibleCandles(now);
+    expect(short.structureBreak).toBeNull();
+    expect(short.breakSummary).toBe("The structure break was not read.");
+    expect(short.breakSummary).not.toContain("No fresh close");
+    expect(short.timeframeSummary).toBe("The higher timeframe was not read.");
+    expect(short.timeframeSummary).not.toMatch(/agree/i);
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: breakCandles("wick"),
+      price: 100,
+      stale: false,
+      invented: false,
+    });
+    const wick = await service.readVisibleCandles(now);
+    expect(wick.structureBreak).toBeNull();
+    expect(wick.breakSummary).toBe("No fresh close beyond a swing.");
+    expect(wick.breakSummary).not.toContain("113");
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: breakCandles("close"),
+      price: 111,
+      stale: false,
+      invented: false,
+    });
+    const closed = await service.readVisibleCandles(now);
+    expect(closed.invented).toBe(false);
+    expect(closed.structureBreak).toBe(110);
+    expect(closed.breakSummary).toBe("Break of structure up at 110.");
+    expect(closed.breakSummary).not.toContain("112");
+
+    store.setLanguage("ar");
+    const arabic = await service.readVisibleCandles(now);
+    expect(arabic.structureBreak).toBe(110);
+    expect(arabic.breakSummary).toBe("كسر هيكل صاعد عند 110.");
+    expect(arabic.breakSummary).not.toContain("Break of structure");
+
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.readVisibleCandles(now);
+    expect(failed.ok).toBe(false);
+    expect(failed.structureBreak).toBeNull();
+    expect(failed.breakSummary).toBeNull();
+    expect(failed.timeframeSummary).toBeNull();
     store.close();
   });
 

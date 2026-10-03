@@ -52,6 +52,9 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private candleShape: CandleShapeView | null = null;
   @state() private dealingRange: DealingRangeView | null = null;
   @state() private priorDay: PriorDayView | null = null;
+  @state() private structureBreak: number | null = null;
+  @state() private breakSummary: string | null = null;
+  @state() private timeframeSummary: string | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -98,6 +101,9 @@ class MarketPage extends OpenClawLightDomElement {
       this.candleShape = null;
       this.dealingRange = null;
       this.priorDay = null;
+      this.structureBreak = null;
+      this.breakSummary = null;
+      this.timeframeSummary = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -234,6 +240,9 @@ class MarketPage extends OpenClawLightDomElement {
       this.candleShape = null;
       this.dealingRange = null;
       this.priorDay = null;
+      this.structureBreak = null;
+      this.breakSummary = null;
+      this.timeframeSummary = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -250,6 +259,9 @@ class MarketPage extends OpenClawLightDomElement {
         candleShape?: CandleShapeView | null;
         range?: DealingRangeView | null;
         priorDay?: PriorDayView | null;
+        structureBreak?: number | null;
+        breakSummary?: string | null;
+        timeframeSummary?: string | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -270,6 +282,9 @@ class MarketPage extends OpenClawLightDomElement {
           : (read.candleShape ?? null);
       this.dealingRange = read.invented || read.range?.invented !== false ? null : read.range;
       this.priorDay = read.invented || read.priorDay?.invented !== false ? null : read.priorDay;
+      this.structureBreak = read.invented || !read.ok ? null : finitePrice(read.structureBreak);
+      this.breakSummary = read.invented || !read.ok ? null : (read.breakSummary ?? null);
+      this.timeframeSummary = read.invented || !read.ok ? null : (read.timeframeSummary ?? null);
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -285,6 +300,9 @@ class MarketPage extends OpenClawLightDomElement {
       this.candleShape = null;
       this.dealingRange = null;
       this.priorDay = null;
+      this.structureBreak = null;
+      this.breakSummary = null;
+      this.timeframeSummary = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -359,8 +377,13 @@ class MarketPage extends OpenClawLightDomElement {
                     sellSide: this.sellSide,
                     demand: this.demandZone,
                     supply: this.supplyZone,
+                    structureBreak: this.structureBreak,
                   }),
                 )}
+                <h2>${t("lonora.market.break")}</h2>
+                <p>${readSentence(this.breakSummary, this.chartError, this.candles.length)}</p>
+                <h2>${t("lonora.market.timeframe")}</h2>
+                <p>${readSentence(this.timeframeSummary, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.priorDay")}</h2>
                 <p>${priorDayText(this.priorDay, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.range")}</h2>
@@ -722,12 +745,36 @@ function sweepText(
   return t("lonora.market.sweepNone");
 }
 
+function readSentence(summary: string | null, error: string | null, candleCount: number) {
+  if (summary && summary.trim().length > 0) {
+    return summary;
+  }
+  if (candleCount === 0) {
+    return error ? t("lonora.market.chartUnavailable") : t("lonora.market.chartEmpty");
+  }
+  return t("lonora.market.chartUnavailable");
+}
+
+function lineColor(kind: ChartMark["kind"]): string {
+  if (kind === "prior-high" || kind === "prior-low") {
+    return "#8a7340";
+  }
+  if (kind === "buy-side") {
+    return "#1f6f8a";
+  }
+  if (kind === "break") {
+    return "#5b3a8a";
+  }
+  return "#8a4b1f";
+}
+
 function chartMarks(input: {
   priorDay: PriorDayView | null;
   buySide: number | null;
   sellSide: number | null;
   demand: ZoneView | null;
   supply: ZoneView | null;
+  structureBreak: number | null;
 }): ChartMark[] {
   const marks: ChartMark[] = [];
   if (input.priorDay && input.priorDay.invented === false) {
@@ -747,6 +794,9 @@ function chartMarks(input: {
   }
   if (input.supply) {
     marks.push({ kind: "supply", low: input.supply.low, high: input.supply.high });
+  }
+  if (input.structureBreak != null) {
+    marks.push({ kind: "break", price: input.structureBreak });
   }
   return marks;
 }
@@ -780,7 +830,7 @@ function renderChart(candles: ChartCandle[], error: string | null, marks: ChartM
           x2=${chart.width}
           y1=${line.y}
           y2=${line.y}
-          stroke=${line.kind === "prior-high" || line.kind === "prior-low" ? "#8a7340" : line.kind === "buy-side" ? "#1f6f8a" : "#8a4b1f"}
+          stroke=${lineColor(line.kind)}
         ></line>
       `,
     )}

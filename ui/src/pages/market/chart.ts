@@ -16,7 +16,7 @@ export type ChartBar = {
   up: boolean;
 };
 
-export type ChartLineKind = "prior-high" | "prior-low" | "buy-side" | "sell-side";
+export type ChartLineKind = "prior-high" | "prior-low" | "buy-side" | "sell-side" | "break";
 
 export type ChartMark =
   | { kind: ChartLineKind; price: number }

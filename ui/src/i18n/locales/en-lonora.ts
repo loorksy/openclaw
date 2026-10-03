@@ -90,6 +90,8 @@ const enLonora = {
       patternRisingChannel: "Rising channel",
       patternFallingChannel: "Falling channel",
       patternHorizontalChannel: "Horizontal channel",
+      break: "Structure break",
+      timeframe: "Higher timeframe",
       candle: "Candle",
       candleUnknown: "No named candle on the latest close.",
       candleNotATrade: "This names the closed candle. It is not a trade.",

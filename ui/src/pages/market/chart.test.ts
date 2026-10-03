@@ -36,4 +36,16 @@ describe("candleChart", () => {
     expect(chart?.bands[0]?.height).toBeGreaterThan(0);
     expect(candleChart([], [{ kind: "prior-high", price: 130 }])).toBeNull();
   });
+
+  it("draws a close-confirmed break and drops a level that is not a price", () => {
+    const candles = [{ time: 1, open: 100, high: 110, low: 95, close: 108 }];
+    const chart = candleChart(candles, [
+      { kind: "break", price: 130 },
+      { kind: "break", price: Number.NaN },
+    ]);
+    expect(chart?.bars).toHaveLength(1);
+    expect(chart?.lines.map((line) => line.kind)).toEqual(["break"]);
+    expect(chart?.lines[0]?.y).toBeLessThan(chart?.bars[0]?.highY ?? 0);
+    expect(candleChart([], [{ kind: "break", price: 130 }])).toBeNull();
+  });
 });

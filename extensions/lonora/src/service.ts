@@ -290,6 +290,9 @@ export class LonoraService {
         sellSide: null,
         demand: null,
         supply: null,
+        structureBreak: null,
+        breakSummary: null,
+        timeframeSummary: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -304,6 +307,8 @@ export class LonoraService {
     const zones = this.noteZones(visible.candles);
     this.noteStructure(visible.candles);
     this.noteTimeframe(visible.candles);
+    const language = this.store.ensureLocalOwner().language;
+    const structureBreak = breakLevel(visible.candles);
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
@@ -319,6 +324,12 @@ export class LonoraService {
           ? computeRangePosition(visible.candles, visible.candles.at(-1)?.close ?? null)
           : null,
       priorDay: visible.candles.length > 0 ? priorGoldDay(visible.candles) : null,
+      structureBreak,
+      breakSummary: breakSentence(visible.candles, language),
+      timeframeSummary:
+        visible.candles.length > 0
+          ? describeHigherTimeframe(visible.candles, language).summary
+          : null,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",
@@ -1155,6 +1166,33 @@ export class LonoraService {
     }
     return lead;
   }
+}
+
+function breakLevel(candles: Candle[]): number | null {
+  if (candles.length < 10) {
+    return null;
+  }
+  const event = latestStructureEvent(
+    detectStructureEvents(candles, detectSwings(candles), calculateAtr(candles)),
+  );
+  return event && Number.isFinite(event.brokenLevel) && event.brokenLevel > 0
+    ? event.brokenLevel
+    : null;
+}
+
+function breakSentence(candles: Candle[], language: OwnerLanguage): string | null {
+  if (candles.length === 0) {
+    return null;
+  }
+  if (candles.length < 10) {
+    return copy(language, "structure.breakUnread");
+  }
+  return describeStructureBreak(
+    language,
+    latestStructureEvent(
+      detectStructureEvents(candles, detectSwings(candles), calculateAtr(candles)),
+    ),
+  );
 }
 
 function calendarSummary(read: CalendarRead, language: OwnerLanguage): string {
