@@ -14,7 +14,7 @@ import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js
 import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { probeProvider } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
-import { dailyBudgetAllows, estimateCostUsd, rollupUsage } from "./domain/usage.js";
+import { dailyBudgetAllows, estimateCostUsd, rollupUsage, usageIdentity } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
@@ -219,6 +219,19 @@ describe("trade boundary", () => {
     expect(blockReasonForTool({ toolName: "lonora_notify", ownerConfirmed: true })).toMatch(
       /market monitor/,
     );
+    expect(blockReasonForTool({ toolName: "sessions_spawn" })).toMatch(/shell/);
+    expect(
+      usageIdentity({
+        provider: "anthropic",
+        model: "claude-sonnet-4-5",
+        modelProviderId: "openai",
+        modelId: "gpt-5",
+      }),
+    ).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" });
+    expect(usageIdentity({ modelProviderId: "openai", modelId: "gpt-5" })).toEqual({
+      provider: "openai",
+      model: "gpt-5",
+    });
     expect(() =>
       assertPermission({ permission: "NOTIFY", caller: "model", ownerConfirmed: false }),
     ).toThrow(/owner confirmation/);
@@ -348,6 +361,14 @@ describe("delegation and migration", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.failure).toBe("delegation_limit");
+    const burst = new LonoraService(LonoraStore.open(":memory:"));
+    for (let index = 0; index < 4; index += 1) {
+      expect(burst.delegate({ agent: "memory-curator", note: `lesson ${index}` }).ok).toBe(true);
+    }
+    expect(burst.delegate({ agent: "memory-curator", note: "one more" }).failure).toBe(
+      "delegation_limit",
+    );
+    burst.store.close();
     store.close();
   });
 
@@ -379,6 +400,11 @@ describe("delegation and migration", () => {
       .run(9, 1, "XAUUSD", "buy", 2300, 2290, "[2310]", "trend", 60, "active");
     source
       .prepare(
+        "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(10, 1, "EURUSD", "buy", 1.1, 1.0, "[1.2]", "fx", 40, "active");
+    source
+      .prepare(
         "INSERT INTO semantic_memories (id, user_id, content, memory_type, symbol, archived) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .run(3, 1, "London open fade", "lesson", "XAUUSD", 0);
@@ -392,7 +418,9 @@ describe("delegation and migration", () => {
     expect(applied.dryRun).toBe(false);
     expect(applied.language).toBe("ar");
     expect(target.getOwner()?.telegramChatId).toBe("555");
+    expect(report.warnings.join(" ")).toMatch(/not XAUUSD/);
     expect(target.listRecommendations()).toHaveLength(1);
+    expect(target.listRecommendations().every((plan) => plan.symbol === "XAUUSD")).toBe(true);
     expect(target.listRecommendations()[0]?.createdCandleTime).toBeGreaterThan(0);
     expect(target.searchMemory("London")[0]?.kind).toBe("lesson");
     target.close();
@@ -560,6 +588,30 @@ describe("manual execution", () => {
     service.recordMonitorFailure(new Error("parse failed"));
     expect(service.marketSnapshot(openAt).dataStatus).toBe("failed");
     expect(service.marketSnapshot(openAt).dataError).toBe("parse failed");
+    let reads = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    service.readCandles = async () => {
+      reads += 1;
+      await gate;
+      return {
+        ok: false,
+        candles: [],
+        price: null,
+        stale: true,
+        invented: false,
+        error: "held",
+      };
+    };
+    const first = service.startMonitor(openAt);
+    const second = service.startMonitor(openAt);
+    expect(reads).toBe(1);
+    release();
+    await first;
+    await second;
+    expect(reads).toBe(1);
     store.close();
   });
 });

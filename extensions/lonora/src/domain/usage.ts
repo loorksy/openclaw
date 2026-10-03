@@ -113,6 +113,17 @@ export function dailyBudgetAllows(input: {
   return cost < input.budgetUsd;
 }
 
+export function usageIdentity(input: {
+  provider?: string;
+  model?: string;
+  modelProviderId?: string;
+  modelId?: string;
+}): { provider: string; model: string } {
+  const provider = input.provider?.trim() || input.modelProviderId?.trim() || "unknown";
+  const model = input.model?.trim() || input.modelId?.trim() || "unknown";
+  return { provider, model };
+}
+
 export function classifyFeature(input: { sessionKey?: string; jobId?: string }): UsageFeature {
   const key = input.sessionKey ?? "";
   if (input.jobId || key.includes(":cron:")) {

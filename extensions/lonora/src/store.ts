@@ -166,12 +166,25 @@ export class LonoraStore {
     if (!placeholder) {
       throw new Error("Lonora already has an owner. A second account cannot be created.");
     }
-    this.db.exec("BEGIN");
+    this.db.exec("SAVEPOINT lonora_adopt_owner");
     try {
       this.db.prepare("DELETE FROM owner WHERE id = ?").run(existing.id);
       const saved = this.insertOwner(owner);
-      this.db.exec("COMMIT");
+      this.db.exec("RELEASE lonora_adopt_owner");
       return saved;
+    } catch (error) {
+      this.db.exec("ROLLBACK TO lonora_adopt_owner");
+      this.db.exec("RELEASE lonora_adopt_owner");
+      throw error;
+    }
+  }
+
+  transaction<T>(run: () => T): T {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const value = run();
+      this.db.exec("COMMIT");
+      return value;
     } catch (error) {
       this.db.exec("ROLLBACK");
       throw error;
@@ -458,6 +471,13 @@ export class LonoraStore {
         input.outputTokens ?? 0,
       );
     return id;
+  }
+
+  countAgentRunsSince(since: number): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS count FROM agent_runs WHERE started_at >= ?")
+      .get(since) as { count: number };
+    return Number(row.count);
   }
 
   listAgentRuns(): {

@@ -9,6 +9,7 @@ import { definePluginEntry, type OpenClawPluginApi } from "openclaw/plugin-sdk/p
 import { Type } from "typebox";
 import type { SpecialistId } from "./src/domain/agents.js";
 import type { Candle } from "./src/domain/candles.js";
+import { usageIdentity } from "./src/domain/usage.js";
 import { LONORA_SYSTEM_CONTEXT, LONORA_TOOL_ALLOW, lonoraToolDecision } from "./src/policy.js";
 import { LonoraService } from "./src/service.js";
 import { LonoraStore, type MemoryKind } from "./src/store.js";
@@ -75,7 +76,7 @@ export default definePluginEntry({
           if (!current) {
             return;
           }
-          void current.monitorOnce().catch((error: unknown) => {
+          void current.startMonitor().catch((error: unknown) => {
             current.recordMonitorFailure(error);
           });
         };
@@ -88,8 +89,14 @@ export default definePluginEntry({
           clearInterval(timer);
           timer = undefined;
         }
-        service?.store.close();
+        const current = service;
         service = null;
+        if (!current) {
+          return;
+        }
+        void current.monitorSettled.finally(() => {
+          current.store.close();
+        });
       },
     });
 
@@ -111,24 +118,35 @@ export default definePluginEntry({
       if (!service) {
         return;
       }
-      const usage = (event as { usage?: { input?: number; output?: number } }).usage;
-      const context = ctx as {
+      const output = event as {
         provider?: string;
         model?: string;
+        usage?: { input?: number; output?: number };
+      };
+      const context = ctx as {
+        modelProviderId?: string;
+        modelId?: string;
         sessionKey?: string;
         jobId?: string;
+        agentId?: string;
       };
-      if (!usage) {
+      if (!output.usage) {
         return;
       }
+      const identity = usageIdentity({
+        provider: output.provider,
+        model: output.model,
+        modelProviderId: context.modelProviderId,
+        modelId: context.modelId,
+      });
       service.recordModelUsage({
-        provider: context.provider ?? "unknown",
-        model: context.model ?? "unknown",
-        inputTokens: usage.input ?? 0,
-        outputTokens: usage.output ?? 0,
+        provider: identity.provider,
+        model: identity.model,
+        inputTokens: output.usage.input ?? 0,
+        outputTokens: output.usage.output ?? 0,
         sessionKey: context.sessionKey,
         jobId: context.jobId,
-        agent: "lonora",
+        agent: context.agentId ?? "lonora",
       });
     });
 
@@ -161,9 +179,10 @@ export default definePluginEntry({
     );
     tool(
       "lonora_candles",
-      "Report whether supplied candles are usable. Closed markets do not invent bars.",
+      "Read closed XAUUSD candles from the market feed. Missing credentials stay unavailable.",
       Type.Object({ count: Type.Optional(Type.Number()) }),
-      () => requireService().readCandles(),
+      (params) =>
+        requireService().readCandles(typeof params.count === "number" ? params.count : undefined),
     );
     tool(
       "lonora_analyze_structure",
@@ -277,14 +296,12 @@ export default definePluginEntry({
         agent: Text,
         candles: Type.Optional(Type.Array(Type.Unknown())),
         note: Type.Optional(Text),
-        depth: Type.Optional(Type.Number()),
       }),
       (params) =>
         requireService().delegate({
           agent: String(params.agent) as SpecialistId,
           candles: params.candles as Candle[] | undefined,
           note: params.note as string | undefined,
-          depth: params.depth as number | undefined,
         }),
     );
     tool(

@@ -28,11 +28,14 @@ import {
 } from "./domain/usage.js";
 import { LonoraStore, type MemoryKind, type ResponsibilityRow } from "./store.js";
 
+const DELEGATION_WINDOW_MS = 60_000;
+
 export class LonoraService {
   dailyBudgetUsd: number | null = null;
   private lastDataStatus = "unknown";
   private lastAssessment: string | null = null;
   private lastDataError: string | null = null;
+  private activeMonitor: Promise<unknown> | null = null;
 
   constructor(readonly store: LonoraStore) {}
 
@@ -121,8 +124,26 @@ export class LonoraService {
     };
   }
 
-  readCandles() {
-    return readGoldCandles();
+  readCandles(count?: number) {
+    return readGoldCandles(count);
+  }
+
+  startMonitor(now = Date.now()): Promise<unknown> {
+    if (this.activeMonitor) {
+      return this.activeMonitor;
+    }
+    let run!: Promise<unknown>;
+    run = this.monitorOnce(now).finally(() => {
+      if (this.activeMonitor === run) {
+        this.activeMonitor = null;
+      }
+    });
+    this.activeMonitor = run;
+    return run;
+  }
+
+  get monitorSettled(): Promise<void> {
+    return this.activeMonitor?.then(() => undefined) ?? Promise.resolve();
   }
 
   async monitorOnce(now = Date.now()) {
@@ -315,7 +336,8 @@ export class LonoraService {
     try {
       assertDelegation({
         depth: input.depth ?? 1,
-        childCount: input.childCount ?? 0,
+        childCount:
+          input.childCount ?? this.store.countAgentRunsSince(Date.now() - DELEGATION_WINDOW_MS),
         requested: 1,
         timeoutMs: 20_000,
         tokenBudget: 4_000,

@@ -35,7 +35,7 @@ The Lonora store holds one owner row. A Boty migration with more than one user f
 
 ## Monitoring
 
-The service timer is not an LLM loop. Each pass reads the gold clock, fetches closed candles only when the market is open and OANDA is configured, then runs deterministic structure checks. A specialist run is recorded only after a material change, and only inside the optional daily budget. An unpriced usage event fails that budget closed. Failed notices wait before the next attempt. A monitor exception is stored as a failed data status.
+The service timer is not an LLM loop. One pass runs at a time. Each pass reads the gold clock, fetches closed candles only when the market is open and OANDA is configured, then runs deterministic structure checks. A specialist run is recorded only after a material change, and only inside the optional daily budget. Usage rows take the provider and model from the model event. An unpriced usage event fails that budget closed. Failed notices wait before the next attempt. A monitor exception is stored as a failed data status. Direct session spawn is blocked. Specialist bursts are capped from recent recorded runs, and the model cannot set its own depth.
 
 ## Sequence already started
 

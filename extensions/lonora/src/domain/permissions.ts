@@ -79,6 +79,7 @@ export const CODING_TOOL_NAMES = [
   "github_publish",
   "github_identity_status",
   "nodes",
+  "sessions_spawn",
 ] as const;
 
 export function isCodingTool(name: string): boolean {

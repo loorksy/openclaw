@@ -4,6 +4,7 @@
  * Does not delete the source database.
  */
 import { DatabaseSync } from "node:sqlite";
+import { isGoldSymbol } from "./domain/candles.js";
 import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js";
 import type { RecommendationPlan } from "./domain/recommendations.js";
 import { LonoraStore } from "./store.js";
@@ -85,51 +86,58 @@ export function planBotyMigration(input: {
     if (recommendations.some((row) => row.entry == null || row.stop_loss == null)) {
       report.warnings.push("Some recommendations have no entry or stop and will be skipped.");
     }
+    const foreign = recommendations.filter((row) => !isGoldSymbol(row.symbol ?? ""));
+    if (foreign.length > 0) {
+      report.warnings.push(`${foreign.length} recommendations are not XAUUSD and will be skipped.`);
+    }
     if (input.apply !== true) {
       return report;
     }
     const importedAt = Date.now();
-    input.target.adoptOwner({
-      id: String(user.id),
-      label: user.email,
-      language,
-      telegramChatId: settings?.telegram_chat_id ?? null,
-      source: "migration",
-    });
-    for (const row of recommendations) {
-      if (
-        row.entry == null ||
-        row.stop_loss == null ||
-        (row.direction !== "buy" && row.direction !== "sell")
-      ) {
-        continue;
-      }
-      const targets = parseTargets(row.targets_json);
-      const createdAt = recommendationCreatedAt(source, row.id, importedAt);
-      const plan: RecommendationPlan = {
-        id: `boty-${row.id}`,
-        symbol: "XAUUSD",
-        direction: row.direction,
-        entryType: "limit_touch",
-        entry: row.entry,
-        stopLoss: row.stop_loss,
-        targets,
-        status: "pending_entry",
-        outcome: "pending",
-        createdCandleTime: createdAt,
-        createdAt,
-        rationale: row.rationale ?? undefined,
-        confidence: row.confidence,
-      };
-      input.target.saveRecommendation(plan);
-    }
-    for (const memory of memories) {
-      input.target.addMemory({
-        kind: mapMemory(memory.memory_type),
-        content: memory.content,
-        symbol: memory.symbol ?? undefined,
+    input.target.transaction(() => {
+      input.target.adoptOwner({
+        id: String(user.id),
+        label: user.email,
+        language,
+        telegramChatId: settings?.telegram_chat_id ?? null,
+        source: "migration",
       });
-    }
+      for (const row of recommendations) {
+        if (
+          !isGoldSymbol(row.symbol ?? "") ||
+          row.entry == null ||
+          row.stop_loss == null ||
+          (row.direction !== "buy" && row.direction !== "sell")
+        ) {
+          continue;
+        }
+        const targets = parseTargets(row.targets_json);
+        const createdAt = recommendationCreatedAt(source, row.id, importedAt);
+        const plan: RecommendationPlan = {
+          id: `boty-${row.id}`,
+          symbol: "XAUUSD",
+          direction: row.direction,
+          entryType: "limit_touch",
+          entry: row.entry,
+          stopLoss: row.stop_loss,
+          targets,
+          status: "pending_entry",
+          outcome: "pending",
+          createdCandleTime: createdAt,
+          createdAt,
+          rationale: row.rationale ?? undefined,
+          confidence: row.confidence,
+        };
+        input.target.saveRecommendation(plan);
+      }
+      for (const memory of memories) {
+        input.target.addMemory({
+          kind: mapMemory(memory.memory_type),
+          content: memory.content,
+          symbol: memory.symbol ?? undefined,
+        });
+      }
+    });
     report.dryRun = false;
     return report;
   } finally {
