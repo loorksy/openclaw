@@ -1031,7 +1031,9 @@ describe("responsibilities, memory, usage", () => {
     expect(lessons).toHaveLength(1);
     expect(lessons[0]?.content.length).toBeLessThanOrEqual(240);
     expect(lessons[0]?.content.startsWith("New York continuation x")).toBe(true);
-    expect(empty.ownerBrief()).toContain(lessons[0]?.content ?? "missing");
+    expect(empty.ownerBrief()).toContain("New York continuation");
+    expect(empty.ownerBrief()).toContain("Plan grade: First target is 4.45R.");
+    expect(empty.ownerBrief().length).toBeLessThanOrEqual(700);
     expect(empty.agentsView().find((agent) => agent.agent === "memory-curator")?.lastResult).toBe(
       copy("en", "memory.stored"),
     );
@@ -1046,6 +1048,25 @@ describe("responsibilities, memory, usage", () => {
     expect(empty.ownerBrief()).toContain("آخر طلب: Next");
     empty.store.close();
     second.store.close();
+  });
+
+  it("keeps the open plan grade when the candle reads fill the brief", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const at = Date.UTC(2026, 0, 14, 15, 0);
+    service.saveRecommendation(
+      plan({ id: "open-plan", entry: 2311, stopLoss: 2291, targets: [2400] }),
+    );
+    store.replaceMemory("structure_read", "XAUUSD", "s".repeat(240));
+    store.replaceMemory("liquidity_read", "XAUUSD", "l".repeat(240));
+    store.replaceMemory("zone_read", "XAUUSD", "z".repeat(240));
+    store.replaceMemory("timeframe_read", "XAUUSD", "t".repeat(240));
+    const brief = service.ownerBrief(at);
+    expect(brief.length).toBeLessThanOrEqual(700);
+    expect(brief.startsWith(service.sessionSentence(at))).toBe(true);
+    expect(brief).toContain("Open plans: buy 2311, stop 2291, target 2400");
+    expect(brief).toContain("Plan grade: First target is 4.45R.");
+    store.close();
   });
 
   it("maps a morning briefing onto a weekday New York cron", () => {
@@ -1068,6 +1089,11 @@ describe("responsibilities, memory, usage", () => {
     expect(scheduled.status).toBe("scheduled");
     expect(scheduled.lastEvent).toBe(copy("en", "tasks.weekdayBriefing"));
     expect(scheduled.lastEvent).not.toContain("0 8");
+    const briefAt = Date.UTC(2026, 0, 14, 15, 0);
+    expect(service.ownerBrief(briefAt)).toContain(
+      `Morning briefing: ${copy("en", "tasks.weekdayBriefing")}`,
+    );
+    expect(service.ownerBrief(briefAt)).not.toContain("0 8");
     expect(service.tasksView().find((row) => row.id === scheduled.id)?.eventLabel).toBe(
       copy("en", "tasks.weekdayBriefing"),
     );
@@ -1076,6 +1102,8 @@ describe("responsibilities, memory, usage", () => {
       lastEvent: "Scheduled 0 8 * * 1-5 America/New_York.",
     });
     expect(store.listResponsibilities()[0]?.lastEvent).toContain("0 8 * * 1-5");
+    expect(service.ownerBrief(briefAt)).toContain(copy("en", "tasks.weekdayBriefing"));
+    expect(service.ownerBrief(briefAt)).not.toContain("0 8");
     expect(service.tasksView()[0]?.eventLabel).toBe(copy("en", "tasks.weekdayBriefing"));
     expect(service.tasksView()[0]?.eventLabel).not.toContain("*");
     store.setLanguage("ar");

@@ -944,6 +944,23 @@ export class LonoraService {
       return `${session} ${copy(language, "memory.empty")}`.slice(0, 700);
     }
     const lines = [session, copy(language, "memory.lead")];
+    if (plans.length > 0) {
+      lines.push(
+        `${copy(language, "memory.plans")} ${plans.map((plan) => planLine(language, plan)).join("; ")}`,
+      );
+      const newest = [...plans].sort((left, right) => right.createdAt - left.createdAt)[0];
+      if (newest) {
+        const review = runRiskReviewer({
+          entry: newest.entry,
+          stopLoss: newest.stopLoss,
+          targets: newest.targets,
+          language,
+        });
+        if (review.ok) {
+          lines.push(`${copy(language, "memory.risk")} ${review.summary}`);
+        }
+      }
+    }
     if (scenario[0]) {
       lines.push(`${copy(language, "memory.scenario")} ${scenario[0].content}`);
     }
@@ -979,25 +996,15 @@ export class LonoraService {
         `${copy(language, "memory.lessons")} ${lessons.map((row) => row.content).join(" ")}`,
       );
     }
-    if (plans.length > 0) {
-      lines.push(
-        `${copy(language, "memory.plans")} ${plans.map((plan) => planLine(language, plan)).join("; ")}`,
-      );
-      const newest = [...plans].sort((left, right) => right.createdAt - left.createdAt)[0];
-      if (newest) {
-        const review = runRiskReviewer({
-          entry: newest.entry,
-          stopLoss: newest.stopLoss,
-          targets: newest.targets,
-          language,
-        });
-        if (review.ok) {
-          lines.push(`${copy(language, "memory.risk")} ${review.summary}`);
-        }
-      }
-    }
     if (tasks.length > 0) {
-      lines.push(`${copy(language, "memory.tasks")} ${tasks.map((row) => row.title).join("; ")}`);
+      lines.push(
+        `${copy(language, "memory.tasks")} ${tasks
+          .map((row) => {
+            const event = ownerEventLabel(language, row.lastEvent);
+            return event ? `${row.title}: ${event}` : row.title;
+          })
+          .join("; ")}`,
+      );
     }
     return lines.join(" ").slice(0, 700);
   }
