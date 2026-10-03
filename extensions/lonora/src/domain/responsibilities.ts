@@ -2,7 +2,9 @@
  * Deterministic responsibility checks. A scheduled phrase becomes a cron
  * expression. Everything else waits for a matching market reason.
  */
+import { copy } from "./copy.js";
 import type { MonitorDecision } from "./monitor.js";
+import type { OwnerLanguage } from "./owner.js";
 
 const TOPIC_RULES: { pattern: RegExp; reasons: string[] }[] = [
   { pattern: /structure|bos|choch|swing|هيكل/i, reasons: ["structure_change"] },
@@ -44,4 +46,43 @@ export function checkResponsibility(
     return { matched: [], waiting: true, closed: false };
   }
   return { matched, waiting: false, closed: false };
+}
+
+/** Owner sentence for a responsibility check. Reason codes stay off the page. */
+export function responsibilityEventText(
+  language: OwnerLanguage,
+  check: { matched: string[]; closed: boolean },
+): string {
+  if (check.closed) {
+    return copy(language, "tasks.waitingClosed");
+  }
+  if (check.matched.length === 0) {
+    return copy(language, "tasks.waiting");
+  }
+  return check.matched.map((reason) => reasonSentence(language, reason)).join(" ");
+}
+
+function reasonSentence(language: OwnerLanguage, reason: string): string {
+  switch (reason) {
+    case "structure_change":
+      return copy(language, "notify.structure");
+    case "liquidity_sweep":
+      return copy(language, "notify.sweep");
+    case "recommendation_change":
+      return copy(language, "notify.recommendation");
+    case "session_transition":
+      return copy(language, "notify.session");
+    case "session_transition_while_closed":
+      return copy(language, "notify.sessionClosed");
+    case "price_move":
+      return copy(language, "notify.price");
+    case "volatility_change":
+      return copy(language, "notify.volatility");
+    case "macro_event":
+      return copy(language, "notify.macro");
+    case "headline_change":
+      return copy(language, "notify.headline");
+    default:
+      return copy(language, "tasks.waiting");
+  }
 }

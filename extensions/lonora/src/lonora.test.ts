@@ -14,7 +14,11 @@ import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js
 import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { probeProvider } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
-import { checkResponsibility, cronForResponsibility } from "./domain/responsibilities.js";
+import {
+  checkResponsibility,
+  cronForResponsibility,
+  responsibilityEventText,
+} from "./domain/responsibilities.js";
 import { dailyBudgetAllows, estimateCostUsd, rollupUsage, usageIdentity } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
@@ -575,6 +579,15 @@ describe("responsibilities, memory, usage", () => {
       checkResponsibility("Watch this liquidity zone.", { reasons: ["volatility_change"] }, true)
         .waiting,
     ).toBe(true);
+    const matched = responsibilityEventText("en", {
+      matched: ["structure_change", "macro_event"],
+      closed: false,
+    });
+    expect(matched).toBe(`${copy("en", "notify.structure")} ${copy("en", "notify.macro")}`);
+    expect(matched).not.toMatch(/structure_change|macro_event/);
+    expect(responsibilityEventText("ar", { matched: ["headline_change"], closed: false })).toBe(
+      copy("ar", "notify.headline"),
+    );
   });
 
   it("replaces one gold scenario and withholds a rate below five outcomes", () => {
@@ -1335,6 +1348,11 @@ describe("manual execution", () => {
       recommendationFingerprint: "previous",
     });
     service.saveRecommendation(plan());
+    service.upsertResponsibility({
+      title: "Watch the plan",
+      instruction: "Tell me if the recommendation changes.",
+      status: "running",
+    });
     service.readCandles = async () => ({
       ok: true,
       candles: risingCandles(20),
@@ -1357,6 +1375,8 @@ describe("manual execution", () => {
     const result = await service.monitorOnce(openAt);
     expect(result.decision.deepAnalysis).toBe(true);
     expect(result.assessment).toBeNull();
+    expect(store.listResponsibilities()[0]?.lastEvent).toBe(copy("en", "notify.recommendation"));
+    expect(store.listResponsibilities()[0]?.lastEvent).not.toMatch(/recommendation_change/);
     service.recordMonitorFailure(new Error("parse failed"));
     expect(service.marketSnapshot(openAt).dataStatus).toBe("failed");
     expect(service.marketSnapshot(openAt).dataError).toBe("parse failed");

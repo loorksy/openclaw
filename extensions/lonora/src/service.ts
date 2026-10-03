@@ -44,7 +44,7 @@ import { prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { computeRangePosition } from "./domain/range-position.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
-import { checkResponsibility } from "./domain/responsibilities.js";
+import { checkResponsibility, responsibilityEventText } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
 import { describeTradingCenters, getTradingSessionInfo } from "./domain/trading-sessions.js";
 import {
@@ -412,11 +412,7 @@ export class LonoraService {
         this.store.saveResponsibility({ ...row, lastCheckAt: now });
         continue;
       }
-      const lastEvent = check.closed
-        ? copy(language, "tasks.waitingClosed")
-        : check.matched.length > 0
-          ? `${copy(language, "tasks.matched")} ${check.matched.join(", ")}`
-          : copy(language, "tasks.waiting");
+      const lastEvent = responsibilityEventText(language, check);
       this.store.saveResponsibility({
         ...row,
         lastCheckAt: now,
