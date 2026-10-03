@@ -384,6 +384,11 @@ export default definePluginEntry({
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(
+      "lonora.candles.read",
+      handle(() => requireService().readVisibleCandles()),
+      { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
       "lonora.recommendations.list",
       handle(() => requireService().store.listRecommendations()),
       { scope: "operator.read" },

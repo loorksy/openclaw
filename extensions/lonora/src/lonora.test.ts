@@ -512,6 +512,26 @@ describe("market data", () => {
     }
   });
 
+  it("drops a candle that has not closed yet", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const now = Date.parse("2026-01-05T15:00:00Z");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: [
+        { time: now - 2 * 3_600_000, open: 2300, high: 2310, low: 2290, close: 2305 },
+        { time: now, open: 2305, high: 2400, low: 2300, close: 2390 },
+      ],
+      price: 2390,
+      stale: false,
+      invented: false,
+    });
+    const read = await service.readVisibleCandles(now);
+    expect(read.invented).toBe(false);
+    expect(read.candles.map((candle) => candle.close)).toEqual([2305]);
+    store.close();
+  });
+
   it("keeps the last real price while gold is closed", async () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);

@@ -1,5 +1,5 @@
 import { consume } from "@lit/context";
-import { html, nothing } from "lit";
+import { html, nothing, svg } from "lit";
 import { state } from "lit/decorators.js";
 import { titleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
@@ -7,6 +7,8 @@ import { t } from "../../i18n/index.ts";
 import { isGatewayMethodAdvertised } from "../../lib/gateway-methods.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
+import { lonoraRequestTarget } from "../lonora/request.ts";
+import { candleChart, type ChartCandle } from "./chart.ts";
 
 type MarketSnapshot = {
   symbol: string;
@@ -27,6 +29,8 @@ class MarketPage extends OpenClawLightDomElement {
   private context!: ApplicationContext;
 
   @state() private snapshot: MarketSnapshot | null = null;
+  @state() private candles: ChartCandle[] = [];
+  @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private loading = false;
 
@@ -58,6 +62,8 @@ class MarketPage extends OpenClawLightDomElement {
     if (!client || gateway.snapshot.phase !== "connected") {
       this.error = t("lonora.market.disconnected");
       this.snapshot = null;
+      this.candles = [];
+      this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
     if (isGatewayMethodAdvertised(gateway.snapshot, "lonora.market.snapshot") === false) {
@@ -73,6 +79,7 @@ class MarketPage extends OpenClawLightDomElement {
         return;
       }
       this.snapshot = snapshot;
+      await this.loadCandles(generation);
     } catch (error) {
       if (generation !== this.loadGeneration) {
         return;
@@ -83,6 +90,35 @@ class MarketPage extends OpenClawLightDomElement {
       if (generation === this.loadGeneration) {
         this.loading = false;
       }
+    }
+  }
+
+  private async loadCandles(generation: number) {
+    const target = lonoraRequestTarget(this.context, "lonora.candles.read");
+    if (!target.ok) {
+      this.candles = [];
+      this.chartError = t("lonora.market.chartUnavailable");
+      return;
+    }
+    try {
+      const read = await target.client.request<{
+        ok: boolean;
+        candles: ChartCandle[];
+        invented: false;
+        error?: string | null;
+      }>("lonora.candles.read", {});
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      this.candles = read.invented ? [] : read.candles;
+      this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
+    } catch (error) {
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      this.candles = [];
+      this.chartError =
+        error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
   }
 
@@ -123,6 +159,8 @@ class MarketPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.market.assessment")}</dt>
                   <dd>${snapshot.assessment ?? snapshot.message}</dd>
                 </dl>
+                <h2>${t("lonora.market.chart")}</h2>
+                ${renderChart(this.candles, this.chartError)}
                 <h2>${t("lonora.market.activeRecommendations")}</h2>
                 ${
                   snapshot.recommendations.length
@@ -149,6 +187,38 @@ class MarketPage extends OpenClawLightDomElement {
       </section>
     `;
   }
+}
+
+function renderChart(candles: ChartCandle[], error: string | null) {
+  const chart = candleChart(candles);
+  if (!chart) {
+    return html`<p>${error ?? t("lonora.market.chartEmpty")}</p>`;
+  }
+  return svg`<svg
+    viewBox="0 0 ${chart.width} ${chart.height}"
+    width="100%"
+    role="img"
+    aria-label=${t("lonora.market.chart")}
+  >
+    ${chart.bars.map(
+      (bar) => svg`
+        <line
+          x1=${bar.x + bar.width / 2}
+          x2=${bar.x + bar.width / 2}
+          y1=${bar.highY}
+          y2=${bar.lowY}
+          stroke=${bar.up ? "#1f8a4c" : "#b42318"}
+        ></line>
+        <rect
+          x=${bar.x}
+          y=${bar.bodyY}
+          width=${bar.width}
+          height=${bar.bodyHeight}
+          fill=${bar.up ? "#1f8a4c" : "#b42318"}
+        ></rect>
+      `,
+    )}
+  </svg>`;
 }
 
 function marketPriceLabel(snapshot: MarketSnapshot): string {

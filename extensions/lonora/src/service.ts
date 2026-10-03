@@ -170,6 +170,31 @@ export class LonoraService {
     return readGoldCandles(count);
   }
 
+  async readVisibleCandles(now = Date.now()) {
+    const read = await this.readCandles(48);
+    if (!read.ok) {
+      return {
+        ok: false as const,
+        candles: [] as Candle[],
+        invented: false as const,
+        stale: true,
+        error: read.error ?? "Market data is unavailable.",
+      };
+    }
+    const visible = candlesVisibleAt(
+      read.candles.filter((candle) => isSaneCandle(candle)),
+      now,
+      GOLD_BAR_MS,
+    );
+    return {
+      ok: visible.candles.length > 0,
+      candles: visible.candles,
+      invented: false as const,
+      stale: visible.stale,
+      error: visible.candles.length > 0 ? null : "No closed candles are visible.",
+    };
+  }
+
   startMonitor(now = Date.now()): Promise<unknown> {
     if (this.activeMonitor) {
       return this.activeMonitor;
