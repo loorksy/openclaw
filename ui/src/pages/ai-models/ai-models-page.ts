@@ -7,6 +7,7 @@ import { t } from "../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import { lonoraRequestTarget } from "../lonora/request.ts";
+import { connectLonoraModel } from "./connect.ts";
 
 type ProviderStatus = {
   provider: "anthropic" | "openai" | "zai" | "openrouter";
@@ -99,14 +100,17 @@ class AiModelsPage extends OpenClawLightDomElement {
       return;
     }
     this.loading = true;
+    this.drafts = { ...this.drafts, [provider]: "" };
     try {
-      const result = await target.client.request<{ error?: string | null }>(
-        "lonora.providers.connect",
-        { provider, apiKey },
-      );
-      this.drafts = { ...this.drafts, [provider]: "" };
+      const result = await connectLonoraModel(target.client, {
+        provider,
+        apiKey,
+        agentId: this.context.gateway.snapshot.assistantAgentId || "main",
+      });
       if (result.error) {
         this.error = result.error;
+      } else if (result.warning) {
+        this.error = result.warning;
       }
       await this.load();
     } catch (error) {
