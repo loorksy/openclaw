@@ -1152,19 +1152,24 @@ export class LonoraService {
     return { ...result, summary };
   }
 
-  agentsView() {
+  agentsView(now = Date.now()) {
     const runs = this.store.listAgentRuns();
     const language = this.store.ensureLocalOwner().language;
     return SPECIALISTS.map((agent) => {
       const latest = runs.find((run) => run.agent === agent);
       const alwaysOn = agent === "market-watcher" || agent === "system-guardian";
+      const lastRunAt = latest?.startedAt ?? null;
       return {
         agent,
         name: specialistName(agent, language),
         state: alwaysOn ? "running" : "on_demand",
         stateLabel: copy(language, alwaysOn ? "state.running" : "state.onDemand"),
         purpose: purposeFor(agent, language),
-        lastRunAt: latest?.startedAt ?? null,
+        lastRunAt,
+        lastRunLabel:
+          lastRunAt == null
+            ? copy(language, "agent.none")
+            : taskClockLabel(language, lastRunAt, now, "last"),
         lastResult: latest?.summary ?? null,
         tokens: (latest?.inputTokens ?? 0) + (latest?.outputTokens ?? 0),
       };

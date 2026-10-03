@@ -18,6 +18,7 @@ type AgentRow = {
   stateLabel?: string;
   purpose: string;
   lastRunAt: number | null;
+  lastRunLabel?: string;
   lastResult: string | null;
   tokens: number;
 };
@@ -124,7 +125,12 @@ class TradingAgentsPage extends OpenClawLightDomElement {
                       <p>${row.purpose}</p>
                       <p>
                         ${t("lonora.agents.lastRun")}
-                        ${row.lastRunAt == null ? t("lonora.agents.none") : new Date(row.lastRunAt).toISOString()}
+                        ${
+                          row.lastRunLabel ||
+                          (row.lastRunAt == null
+                            ? t("lonora.agents.none")
+                            : new Date(row.lastRunAt).toISOString())
+                        }
                       </p>
                       <p>
                         ${t("lonora.agents.lastResult")}

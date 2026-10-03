@@ -314,6 +314,24 @@ describe("structure", () => {
     expect(service.agentsView().find((row) => row.agent === "structure-analyst")?.purpose).toBe(
       "Read swings, trend, and structure breaks from closed candles.",
     );
+    expect(
+      service.agentsView().find((row) => row.agent === "structure-analyst")?.lastRunLabel,
+    ).toBe("None yet");
+    store.recordAgentRun({
+      agent: "structure-analyst",
+      status: "ok",
+      summary: "No fresh close beyond a swing.",
+    });
+    const started =
+      service.agentsView().find((row) => row.agent === "structure-analyst")?.lastRunAt ?? 0;
+    expect(
+      service.agentsView(started + 12 * 60_000).find((row) => row.agent === "structure-analyst")
+        ?.lastRunLabel,
+    ).toBe("12 minutes ago");
+    expect(
+      service.agentsView(started + 12 * 60_000).find((row) => row.agent === "structure-analyst")
+        ?.lastRunLabel,
+    ).not.toContain("T");
     store.setLanguage("ar");
     const purposes = service.agentsView().map((row) => row.purpose);
     expect(purposes).toContain("يقرأ التأرجح والاتجاه وكسور الهيكل من الشموع المغلقة.");
@@ -324,6 +342,13 @@ describe("structure", () => {
     expect(service.agentsView().find((row) => row.agent === "market-watcher")?.stateLabel).toBe(
       "يعمل",
     );
+    expect(
+      service.agentsView(started + 2 * 60 * 60_000).find((row) => row.agent === "structure-analyst")
+        ?.lastRunLabel,
+    ).toBe("منذ 2 س");
+    expect(
+      service.agentsView().find((row) => row.agent === "liquidity-analyst")?.lastRunLabel,
+    ).toBe("لا شيء بعد");
     store.close();
   });
 
