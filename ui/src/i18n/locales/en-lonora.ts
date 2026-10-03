@@ -210,9 +210,19 @@ const enLonora = {
   },
 } satisfies TranslationMap;
 
+// Nested on purpose. Object.assign of a partial aboutPage would drop the rest of that page.
+const lonoraAbout = {
+  productName: "Lonora",
+  tagline: "Private gold intelligence for one owner.",
+};
+
 export const registerLonoraEnglish = Object.assign(
   () => {
     Object.assign(en, enLonora);
+    const about = en.aboutPage;
+    if (about && typeof about === "object") {
+      Object.assign(about, lonoraAbout);
+    }
   },
   { catalog: enLonora },
 );
