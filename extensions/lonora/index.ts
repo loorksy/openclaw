@@ -127,7 +127,7 @@ export default definePluginEntry({
 
     api.on("before_prompt_build", () => ({
       prependSystemContext: service
-        ? `${LONORA_SYSTEM_CONTEXT}\n${service.sessionSentence()}\n${service.ownerBrief()}`
+        ? `${LONORA_SYSTEM_CONTEXT}\n${service.ownerBrief()}`
         : LONORA_SYSTEM_CONTEXT,
       toolsAllow: [...LONORA_TOOL_ALLOW],
     }));

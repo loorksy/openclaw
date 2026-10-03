@@ -793,15 +793,23 @@ describe("responsibilities, memory, usage", () => {
     second.store.setLanguage("ar");
     expect(second.ownerBrief()).toContain("ذاكرة الذهب");
     const empty = new LonoraService(LonoraStore.open(":memory:"));
-    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
-    expect(empty.ownerBrief()).not.toMatch(/%/);
+    const emptyAt = Date.UTC(2026, 0, 14, 15, 0);
+    expect(empty.ownerBrief(emptyAt)).toBe(
+      `${empty.sessionSentence(emptyAt)} ${copy("en", "memory.empty")}`,
+    );
+    expect(empty.ownerBrief(emptyAt)).toContain("London and New York are open");
+    expect(empty.ownerBrief(emptyAt)).not.toMatch(/%/);
     const blank = empty.delegate({ agent: "memory-curator", note: "   \n  " });
     expect(blank.ok).toBe(true);
     expect(blank.summary).toBe(copy("en", "memory.none"));
     expect(empty.recall("lesson", "lesson")).toEqual([]);
-    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(empty.ownerBrief(emptyAt)).toBe(
+      `${empty.sessionSentence(emptyAt)} ${copy("en", "memory.empty")}`,
+    );
     empty.saveRecommendation(plan({ id: "closed-plan", outcome: "loss", status: "sl_hit" }));
-    expect(empty.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(empty.ownerBrief(emptyAt)).toBe(
+      `${empty.sessionSentence(emptyAt)} ${copy("en", "memory.empty")}`,
+    );
     empty.saveRecommendation(
       plan({ id: "open-plan", entry: 2311, stopLoss: 2291, targets: [2400] }),
     );
@@ -1302,7 +1310,12 @@ describe("market data", () => {
     const arabic = await service.compareTimeframes(openAt);
     expect(arabic.summary).toBe("الإطار الزمني الأعلى لم يُقرأ.");
     expect(arabic.summary).not.toContain("was not read");
-    expect(service.ownerBrief()).toBe(copy("ar", "memory.empty"));
+    const briefAt = Date.UTC(2026, 0, 17, 12, 0);
+    expect(service.ownerBrief(briefAt)).toBe(
+      `${service.sessionSentence(briefAt)} ${copy("ar", "memory.empty")}`,
+    );
+    expect(service.ownerBrief(briefAt)).toContain("سيدني");
+    expect(service.ownerBrief(briefAt)).not.toContain("Gold is open");
     store.close();
   });
 
@@ -1324,10 +1337,16 @@ describe("market data", () => {
     });
     const closed = await service.monitorOnce(closedAt);
     expect(closed.dataStatus).toBe("closed");
-    expect(service.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(service.ownerBrief(closedAt)).toBe(
+      `${service.sessionSentence(closedAt)} ${copy("en", "memory.empty")}`,
+    );
+    expect(service.ownerBrief(closedAt)).not.toContain("120");
 
     await service.monitorOnce(openAt);
-    expect(service.ownerBrief()).toContain("Higher timeframe: The higher timeframe was not read.");
+    expect(service.ownerBrief(openAt)).toContain(
+      "Higher timeframe: The higher timeframe was not read.",
+    );
+    expect(service.ownerBrief(openAt)).toContain(service.sessionSentence(openAt));
     expect(service.ownerBrief()).not.toMatch(/agree/i);
     expect(service.recall("not read", "timeframe_read")).toHaveLength(1);
 
@@ -1531,7 +1550,10 @@ describe("market data", () => {
 
     const closed = await service.monitorOnce(closedAt);
     expect(closed.dataStatus).toBe("closed");
-    expect(service.ownerBrief()).toBe(copy("en", "memory.empty"));
+    expect(service.ownerBrief(closedAt)).toBe(
+      `${service.sessionSentence(closedAt)} ${copy("en", "memory.empty")}`,
+    );
+    expect(service.ownerBrief(closedAt)).not.toContain("100");
     expect(service.recall("100", "structure_read")).toEqual([]);
 
     await service.monitorOnce(openAt);

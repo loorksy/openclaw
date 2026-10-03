@@ -842,9 +842,10 @@ export class LonoraService {
     );
   }
 
-  /** One gold brief for every door. An empty store does not invent a rate. */
-  ownerBrief(): string {
+  /** One gold brief for every door. The clock leads. An empty store does not invent a rate. */
+  ownerBrief(now = Date.now()): string {
     const language = this.store.ensureLocalOwner().language;
+    const session = this.sessionSentence(now);
     const scenario = this.store.listRecentMemory("scenario", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
@@ -873,9 +874,9 @@ export class LonoraService {
       plans.length === 0 &&
       tasks.length === 0
     ) {
-      return copy(language, "memory.empty");
+      return `${session} ${copy(language, "memory.empty")}`.slice(0, 700);
     }
-    const lines = [copy(language, "memory.lead")];
+    const lines = [session, copy(language, "memory.lead")];
     if (scenario[0]) {
       lines.push(`${copy(language, "memory.scenario")} ${scenario[0].content}`);
     }
