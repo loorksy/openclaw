@@ -315,6 +315,11 @@ export class LonoraService {
         structureBreak: null,
         breakSummary: null,
         timeframeSummary: null,
+        rangeSummary: null,
+        patternSummary: null,
+        candleSummary: null,
+        zoneSummary: null,
+        liquiditySummary: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -331,6 +336,19 @@ export class LonoraService {
     this.noteTimeframe(visible.candles);
     const language = this.store.ensureLocalOwner().language;
     const structureBreak = breakLevel(visible.candles);
+    const pattern = visible.candles.length > 0 ? classifySwingRange(visible.candles) : null;
+    const candleShape = visible.candles.length > 0 ? latestCandleShape(visible.candles) : null;
+    const range =
+      visible.candles.length > 0
+        ? computeRangePosition(visible.candles, visible.candles.at(-1)?.close ?? null)
+        : null;
+    const sentences = chartSentences(language, visible.candles, {
+      pattern,
+      candleShape,
+      range,
+      zones,
+      resting,
+    });
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
@@ -339,12 +357,9 @@ export class LonoraService {
       sellSide: resting.sellSide,
       demand: zones.demand,
       supply: zones.supply,
-      pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
-      candleShape: visible.candles.length > 0 ? latestCandleShape(visible.candles) : null,
-      range:
-        visible.candles.length > 0
-          ? computeRangePosition(visible.candles, visible.candles.at(-1)?.close ?? null)
-          : null,
+      pattern,
+      candleShape,
+      range,
       priorDay: visible.candles.length > 0 ? priorGoldDay(visible.candles) : null,
       structureBreak,
       breakSummary: breakSentence(visible.candles, language),
@@ -352,6 +367,7 @@ export class LonoraService {
         visible.candles.length > 0
           ? describeHigherTimeframe(visible.candles, language).summary
           : null,
+      ...sentences,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",
@@ -1310,6 +1326,45 @@ export class LonoraService {
     }
     return lead;
   }
+}
+
+function chartSentences(
+  language: OwnerLanguage,
+  candles: Candle[],
+  input: {
+    pattern: ReturnType<typeof classifySwingRange> | null;
+    candleShape: ReturnType<typeof latestCandleShape>;
+    range: ReturnType<typeof computeRangePosition>;
+    zones: ReturnType<typeof nearestGoldZones>;
+    resting: ReturnType<typeof restingLiquidity>;
+  },
+): {
+  rangeSummary: string | null;
+  patternSummary: string | null;
+  candleSummary: string | null;
+  zoneSummary: string | null;
+  liquiditySummary: string | null;
+} {
+  if (candles.length === 0) {
+    return {
+      rangeSummary: null,
+      patternSummary: null,
+      candleSummary: null,
+      zoneSummary: null,
+      liquiditySummary: null,
+    };
+  }
+  return {
+    rangeSummary: input.range
+      ? describeRange(language, input.range)
+      : copy(language, "range.unread"),
+    patternSummary: input.pattern
+      ? describePattern(input.pattern, language)
+      : copy(language, "pattern.unclassified"),
+    candleSummary: describeCandleShape(input.candleShape, language),
+    zoneSummary: describeNearestZones(language, input.zones, candles.length),
+    liquiditySummary: describeRestingLiquidity(language, input.resting, candles.length),
+  };
 }
 
 function breakLevel(candles: Candle[]): number | null {

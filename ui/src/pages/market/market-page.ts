@@ -57,6 +57,11 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private structureBreak: number | null = null;
   @state() private breakSummary: string | null = null;
   @state() private timeframeSummary: string | null = null;
+  @state() private rangeSummary: string | null = null;
+  @state() private patternSummary: string | null = null;
+  @state() private candleSummary: string | null = null;
+  @state() private zoneSummary: string | null = null;
+  @state() private liquiditySummary: string | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -107,6 +112,11 @@ class MarketPage extends OpenClawLightDomElement {
       this.structureBreak = null;
       this.breakSummary = null;
       this.timeframeSummary = null;
+      this.rangeSummary = null;
+      this.patternSummary = null;
+      this.candleSummary = null;
+      this.zoneSummary = null;
+      this.liquiditySummary = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -274,6 +284,11 @@ class MarketPage extends OpenClawLightDomElement {
       this.structureBreak = null;
       this.breakSummary = null;
       this.timeframeSummary = null;
+      this.rangeSummary = null;
+      this.patternSummary = null;
+      this.candleSummary = null;
+      this.zoneSummary = null;
+      this.liquiditySummary = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -293,6 +308,11 @@ class MarketPage extends OpenClawLightDomElement {
         structureBreak?: number | null;
         breakSummary?: string | null;
         timeframeSummary?: string | null;
+        rangeSummary?: string | null;
+        patternSummary?: string | null;
+        candleSummary?: string | null;
+        zoneSummary?: string | null;
+        liquiditySummary?: string | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -316,6 +336,11 @@ class MarketPage extends OpenClawLightDomElement {
       this.structureBreak = read.invented || !read.ok ? null : finitePrice(read.structureBreak);
       this.breakSummary = read.invented || !read.ok ? null : (read.breakSummary ?? null);
       this.timeframeSummary = read.invented || !read.ok ? null : (read.timeframeSummary ?? null);
+      this.rangeSummary = read.invented || !read.ok ? null : (read.rangeSummary ?? null);
+      this.patternSummary = read.invented || !read.ok ? null : (read.patternSummary ?? null);
+      this.candleSummary = read.invented || !read.ok ? null : (read.candleSummary ?? null);
+      this.zoneSummary = read.invented || !read.ok ? null : (read.zoneSummary ?? null);
+      this.liquiditySummary = read.invented || !read.ok ? null : (read.liquiditySummary ?? null);
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -334,6 +359,11 @@ class MarketPage extends OpenClawLightDomElement {
       this.structureBreak = null;
       this.breakSummary = null;
       this.timeframeSummary = null;
+      this.rangeSummary = null;
+      this.patternSummary = null;
+      this.candleSummary = null;
+      this.zoneSummary = null;
+      this.liquiditySummary = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -428,20 +458,57 @@ class MarketPage extends OpenClawLightDomElement {
                 <h2>${t("lonora.market.priorDay")}</h2>
                 <p>${priorDayText(this.priorDay, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.range")}</h2>
-                <p>${rangeText(this.dealingRange, this.chartError, this.candles.length)}</p>
+                <p>
+                  ${
+                    this.rangeSummary != null
+                      ? readSentence(this.rangeSummary, this.chartError, this.candles.length)
+                      : rangeText(this.dealingRange, this.chartError, this.candles.length)
+                  }
+                </p>
                 <h2>${t("lonora.market.sweep")}</h2>
-                <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
-                <h2>${t("lonora.market.pools")}</h2>
-                <p>${poolText(this.buySide, "lonora.market.poolsBuy")}</p>
-                <p>${poolText(this.sellSide, "lonora.market.poolsSell")}</p>
+                <p>
+                  ${
+                    this.liquiditySummary != null
+                      ? readSentence(this.liquiditySummary, this.chartError, this.candles.length)
+                      : sweepText(this.latestSweep, this.chartError, this.candles.length)
+                  }
+                </p>
+                ${
+                  this.liquiditySummary != null
+                    ? nothing
+                    : html`<h2>${t("lonora.market.pools")}</h2>
+                        <p>${poolText(this.buySide, "lonora.market.poolsBuy")}</p>
+                        <p>${poolText(this.sellSide, "lonora.market.poolsSell")}</p>`
+                }
                 <h2>${t("lonora.market.zones")}</h2>
                 <p>
-                  ${zonesText(this.demandZone, this.supplyZone, this.chartError, this.candles.length)}
+                  ${
+                    this.zoneSummary != null
+                      ? readSentence(this.zoneSummary, this.chartError, this.candles.length)
+                      : zonesText(
+                          this.demandZone,
+                          this.supplyZone,
+                          this.chartError,
+                          this.candles.length,
+                        )
+                  }
                 </p>
                 <h2>${t("lonora.market.pattern")}</h2>
-                <p>${patternText(this.pattern, this.chartError, this.candles.length)}</p>
+                <p>
+                  ${
+                    this.patternSummary != null
+                      ? readSentence(this.patternSummary, this.chartError, this.candles.length)
+                      : patternText(this.pattern, this.chartError, this.candles.length)
+                  }
+                </p>
                 <h2>${t("lonora.market.candle")}</h2>
-                <p>${candleText(this.candleShape, this.chartError, this.candles.length)}</p>
+                <p>
+                  ${
+                    this.candleSummary != null
+                      ? readSentence(this.candleSummary, this.chartError, this.candles.length)
+                      : candleText(this.candleShape, this.chartError, this.candles.length)
+                  }
+                </p>
                 <h2>${t("lonora.market.activeRecommendations")}</h2>
                 ${
                   snapshot.recommendations.length

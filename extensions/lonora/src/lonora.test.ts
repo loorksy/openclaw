@@ -1740,6 +1740,26 @@ describe("market data", () => {
     });
     const read = await service.readVisibleCandles(openAt);
     expect(read.invented).toBe(false);
+    expect(read.range).not.toBeNull();
+    expect(read.rangeSummary).toContain(
+      copy(
+        "en",
+        read.range?.label === "discount"
+          ? "range.discount"
+          : read.range?.label === "mid_range"
+            ? "range.mid"
+            : read.range?.label === "near_high"
+              ? "range.nearHigh"
+              : read.range?.label === "near_low"
+                ? "range.nearLow"
+                : "range.premium",
+      ),
+    );
+    expect(read.rangeSummary).not.toMatch(/mid_range|near_high|near_low/);
+    expect(read.patternSummary).not.toMatch(/double_top|head_and_shoulders|cup_and_handle/);
+    expect(read.candleSummary).not.toMatch(/inverted_hammer|bullish_engulfing/);
+    expect(read.zoneSummary).not.toMatch(/buy_side/);
+    expect(read.liquiditySummary).not.toMatch(/buy_side|sell_side/);
     expect(service.ownerBrief()).toContain("Higher timeframe: Uptrend. The four-hour read is up.");
     expect(service.ownerBrief()).toContain("The working timeframe agrees with that read.");
     expect(service.ownerBrief()).not.toContain("was not read");
@@ -1785,6 +1805,9 @@ describe("market data", () => {
     });
     const short = await service.readVisibleCandles(now);
     expect(short.structureBreak).toBeNull();
+    expect(short.rangeSummary).toBe(copy("en", "range.unread"));
+    expect(short.zoneSummary).toBe(copy("en", "zones.short"));
+    expect(short.patternSummary).toBe(copy("en", "pattern.unclassified"));
     expect(short.breakSummary).toBe("The structure break was not read.");
     expect(short.breakSummary).not.toContain("No fresh close");
     expect(short.timeframeSummary).toBe("The higher timeframe was not read.");
@@ -1820,6 +1843,12 @@ describe("market data", () => {
     expect(arabic.structureBreak).toBe(110);
     expect(arabic.breakSummary).toBe("كسر هيكل صاعد عند 110.");
     expect(arabic.breakSummary).not.toContain("Break of structure");
+    expect(arabic.rangeSummary).toBe(copy("ar", "range.unread"));
+    expect(arabic.rangeSummary).not.toContain("was not read");
+    expect(arabic.patternSummary).not.toContain("swing range");
+    expect(arabic.candleSummary).not.toContain("Not a trade");
+    expect(arabic.zoneSummary).not.toContain("Demand");
+    expect(arabic.liquiditySummary).not.toContain("Resting buy-side");
 
     service.readCandles = async () => ({
       ok: false,
@@ -1834,6 +1863,11 @@ describe("market data", () => {
     expect(failed.structureBreak).toBeNull();
     expect(failed.breakSummary).toBeNull();
     expect(failed.timeframeSummary).toBeNull();
+    expect(failed.rangeSummary).toBeNull();
+    expect(failed.patternSummary).toBeNull();
+    expect(failed.candleSummary).toBeNull();
+    expect(failed.zoneSummary).toBeNull();
+    expect(failed.liquiditySummary).toBeNull();
     store.close();
   });
 
