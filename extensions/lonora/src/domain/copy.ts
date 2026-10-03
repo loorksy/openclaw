@@ -100,6 +100,7 @@ const COPY = {
     "memory.timeframe": "Higher timeframe:",
     "memory.calendar": "Calendar:",
     "memory.headlines": "Headlines:",
+    "memory.cases": "Earlier moments:",
     "memory.plans": "Open plans:",
     "memory.risk": "Plan grade:",
     "purpose.marketWatcher":
@@ -348,6 +349,7 @@ const COPY = {
     "memory.timeframe": "الإطار الأعلى:",
     "memory.calendar": "التقويم:",
     "memory.headlines": "العناوين:",
+    "memory.cases": "لحظات سابقة:",
     "memory.plans": "خطط مفتوحة:",
     "memory.risk": "درجة الخطة:",
     "purpose.marketWatcher": "يراقب الذهب للتغيّر المهم دون استدعاء نموذج عند كل شمعة.",

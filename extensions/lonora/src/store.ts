@@ -16,6 +16,7 @@ export type MemoryKind =
   | "timeframe_read"
   | "calendar_read"
   | "headline_read"
+  | "case_read"
   | "recommendation"
   | "historical_case"
   | "lesson"

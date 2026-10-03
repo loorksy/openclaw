@@ -1140,6 +1140,57 @@ describe("responsibilities, memory, usage", () => {
     store.close();
   });
 
+  it("stores the similar-moment sentence in the gold brief", async () => {
+    const store = LonoraStore.open(":memory:");
+    let candlesOk = true;
+    const service = new (class extends LonoraService {
+      override readCandles() {
+        return Promise.resolve(
+          candlesOk
+            ? {
+                ok: true as const,
+                candles: risingCandles(40),
+                price: 2339,
+                stale: false,
+                invented: false as const,
+              }
+            : {
+                ok: false as const,
+                candles: [],
+                price: null,
+                stale: true,
+                invented: false as const,
+                error: "down",
+              },
+        );
+      }
+    })(store);
+    const now = Date.UTC(2026, 0, 14, 15, 0);
+    const report = await service.compareSimilarHistory({ now });
+    expect(report.ok).toBe(true);
+    expect(report.winRate).toBeNull();
+    expect(report.text).not.toMatch(/%/);
+    expect(service.ownerBrief(now)).toContain(
+      `${copy("en", "memory.cases")} ${copy("en", "cases.none")}`,
+    );
+    candlesOk = false;
+    const failed = await service.compareSimilarHistory({ now });
+    expect(failed.ok).toBe(false);
+    expect(service.ownerBrief(now)).toContain(copy("en", "cases.none"));
+    expect(service.ownerBrief(now)).not.toContain("down");
+    expect(service.remember("case_read", "invented 80%", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief(now)).not.toContain("80%");
+    store.setLanguage("ar");
+    candlesOk = true;
+    const arabic = await service.compareSimilarHistory({ now });
+    expect(arabic.text).toContain(copy("ar", "cases.none"));
+    expect(service.ownerBrief(now)).toContain(
+      `${copy("ar", "memory.cases")} ${copy("ar", "cases.none")}`,
+    );
+    expect(service.ownerBrief(now)).not.toContain("Earlier moments:");
+    store.close();
+  });
+
   it("attributes estimated cost by provider and feature", () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);

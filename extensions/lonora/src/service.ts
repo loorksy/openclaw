@@ -680,6 +680,9 @@ export class LonoraService {
     const text = [scenario.writable ? scenario.text : "", safe.text]
       .filter((part) => part.trim().length > 0)
       .join(" ");
+    if (history.ok && safe.text.trim()) {
+      this.noteCases(safe.text);
+    }
     const summary = text || copy(language, "cases.insufficient");
     this.store.recordAgentRun({
       agent: "research-agent",
@@ -710,7 +713,8 @@ export class LonoraService {
       kind === "zone_read" ||
       kind === "timeframe_read" ||
       kind === "calendar_read" ||
-      kind === "headline_read"
+      kind === "headline_read" ||
+      kind === "case_read"
     ) {
       return null;
     }
@@ -837,6 +841,17 @@ export class LonoraService {
     }
   }
 
+  /**
+   * One similar-moment sentence after a successful closed-candle comparison.
+   * A failed read leaves the previous sentence. A short sample stores the count.
+   */
+  private noteCases(summary: string): void {
+    const text = summary.replace(/\s+/g, " ").trim().slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("case_read", "XAUUSD", text);
+    }
+  }
+
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
   noteConversation(messages: readonly unknown[]): string | null {
     const text = latestOwnerText(messages);
@@ -883,6 +898,7 @@ export class LonoraService {
     const language = this.store.ensureLocalOwner().language;
     const session = this.sessionSentence(now);
     const scenario = this.store.listRecentMemory("scenario", 1);
+    const cases = this.store.listRecentMemory("case_read", 1);
     const lessons = this.store.listRecentMemory("lesson", 3);
     const observation = this.store.listRecentMemory("market_observation", 1);
     const structure = this.store.listRecentMemory("structure_read", 1);
@@ -902,6 +918,7 @@ export class LonoraService {
       .slice(0, 5);
     if (
       scenario.length === 0 &&
+      cases.length === 0 &&
       lessons.length === 0 &&
       observation.length === 0 &&
       structure.length === 0 &&
@@ -919,6 +936,9 @@ export class LonoraService {
     const lines = [session, copy(language, "memory.lead")];
     if (scenario[0]) {
       lines.push(`${copy(language, "memory.scenario")} ${scenario[0].content}`);
+    }
+    if (cases[0]) {
+      lines.push(`${copy(language, "memory.cases")} ${cases[0].content}`);
     }
     if (observation[0]) {
       lines.push(`${copy(language, "memory.observation")} ${observation[0].content}`);
