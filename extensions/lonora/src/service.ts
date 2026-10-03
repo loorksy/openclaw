@@ -986,13 +986,16 @@ export class LonoraService {
 
   agentsView() {
     const runs = this.store.listAgentRuns();
+    const language = this.store.ensureLocalOwner().language;
     return SPECIALISTS.map((agent) => {
       const latest = runs.find((run) => run.agent === agent);
       const alwaysOn = agent === "market-watcher" || agent === "system-guardian";
       return {
         agent,
+        name: specialistName(agent, language),
         state: alwaysOn ? "running" : "on_demand",
-        purpose: purposeFor(agent, this.store.ensureLocalOwner().language),
+        stateLabel: copy(language, alwaysOn ? "state.running" : "state.onDemand"),
+        purpose: purposeFor(agent, language),
         lastRunAt: latest?.startedAt ?? null,
         lastResult: latest?.summary ?? null,
         tokens: (latest?.inputTokens ?? 0) + (latest?.outputTokens ?? 0),
@@ -1149,6 +1152,31 @@ function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
   return target == null
     ? `${side} ${plan.entry}, ${levels}`
     : `${side} ${plan.entry}, ${levels}, ${copy(language, "memory.planTarget")} ${target}`;
+}
+
+function specialistName(agent: SpecialistId, language: OwnerLanguage): string {
+  switch (agent) {
+    case "market-watcher":
+      return copy(language, "name.marketWatcher");
+    case "structure-analyst":
+      return copy(language, "name.structure");
+    case "liquidity-analyst":
+      return copy(language, "name.liquidity");
+    case "supply-demand-analyst":
+      return copy(language, "name.zones");
+    case "multi-timeframe-analyst":
+      return copy(language, "name.mtf");
+    case "macro-news-analyst":
+      return copy(language, "name.macro");
+    case "risk-reviewer":
+      return copy(language, "name.risk");
+    case "research-agent":
+      return copy(language, "name.research");
+    case "memory-curator":
+      return copy(language, "name.memory");
+    case "system-guardian":
+      return copy(language, "name.guardian");
+  }
 }
 
 function purposeFor(agent: SpecialistId, language: OwnerLanguage): string {

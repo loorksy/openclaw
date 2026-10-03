@@ -13,7 +13,9 @@ registerLonoraEnglish();
 
 type AgentRow = {
   agent: string;
+  name?: string;
   state: "running" | "on_demand";
+  stateLabel?: string;
   purpose: string;
   lastRunAt: number | null;
   lastResult: string | null;
@@ -105,8 +107,20 @@ class TradingAgentsPage extends OpenClawLightDomElement {
                 ${this.rows.map(
                   (row) => html`
                     <li>
-                      <strong>${t(`lonora.agents.names.${row.agent}`)}</strong>
-                      <p>${t(`lonora.agents.state.${row.state}`)}</p>
+                      <strong
+                        >${
+                          row.name && row.name.trim().length > 0
+                            ? row.name
+                            : t(`lonora.agents.names.${row.agent}`)
+                        }</strong
+                      >
+                      <p>
+                        ${
+                          row.stateLabel && row.stateLabel.trim().length > 0
+                            ? row.stateLabel
+                            : t(`lonora.agents.state.${row.state}`)
+                        }
+                      </p>
                       <p>${row.purpose}</p>
                       <p>
                         ${t("lonora.agents.lastRun")}

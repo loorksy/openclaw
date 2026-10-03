@@ -265,6 +265,12 @@ describe("structure", () => {
     const purposes = service.agentsView().map((row) => row.purpose);
     expect(purposes).toContain("يقرأ التأرجح والاتجاه وكسور الهيكل من الشموع المغلقة.");
     expect(purposes.join(" ")).not.toContain("closed candles");
+    const structure = service.agentsView().find((row) => row.agent === "structure-analyst");
+    expect(structure?.name).toBe("الهيكل");
+    expect(structure?.stateLabel).toBe("عند الطلب");
+    expect(service.agentsView().find((row) => row.agent === "market-watcher")?.stateLabel).toBe(
+      "يعمل",
+    );
     store.close();
   });
 
