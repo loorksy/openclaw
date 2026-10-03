@@ -1774,15 +1774,37 @@ describe("market data", () => {
     store.close();
   });
 
-  it("names the open centers on the market snapshot", () => {
+  it("names the open centers on the market snapshot", async () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);
-    const winter = service.marketSnapshot(Date.UTC(2026, 0, 14, 15, 0));
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    const winter = service.marketSnapshot(openAt);
     expect(winter.centers).toBe("London and New York are open. London and New York overlap.");
     expect(winter.invented).toBe(false);
     expect(winter.clock.session).toBe("newyork");
+    expect(winter.dataStatus).toBe("unknown");
+    expect(winter.dataStatusLabel).toBe(copy("en", "data.unknown"));
+    expect(winter.dataStatusLabel).not.toBe("Live");
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+    });
+    await service.monitorOnce(openAt);
+    const missing = service.marketSnapshot(openAt);
+    expect(missing.dataStatus).toBe("unavailable");
+    expect(missing.dataError).toBe("Market data is unavailable.");
+    expect(missing.dataErrorLabel).toBe(copy("en", "data.errorUnavailable"));
     store.setLanguage("ar");
-    expect(service.marketSnapshot(Date.UTC(2026, 0, 17, 12, 0)).centers).toContain("سيدني");
+    expect(service.marketSnapshot(openAt).dataErrorLabel).toBe(copy("ar", "data.errorUnavailable"));
+    expect(service.marketSnapshot(openAt).dataStatusLabel).toBe(copy("ar", "data.unavailable"));
+    const weekend = service.marketSnapshot(Date.UTC(2026, 0, 17, 12, 0));
+    expect(weekend.centers).toContain("سيدني");
+    expect(weekend.dataStatus).toBe("closed");
+    expect(weekend.dataStatusLabel).toBe(copy("ar", "data.closed"));
+    expect(weekend.dataErrorLabel).toBeNull();
     store.close();
   });
 
@@ -2402,6 +2424,11 @@ describe("manual execution", () => {
     expect(store.listResponsibilities()[0]?.lastEvent).not.toMatch(/recommendation_change/);
     service.recordMonitorFailure(new Error("parse failed"));
     expect(service.marketSnapshot(openAt).dataStatus).toBe("failed");
+    expect(service.marketSnapshot(openAt).dataError).toBe("parse failed");
+    expect(service.marketSnapshot(openAt).dataStatusLabel).toBe(copy("en", "data.failed"));
+    expect(service.marketSnapshot(openAt).dataErrorLabel).toBe("parse failed");
+    store.setLanguage("ar");
+    expect(service.marketSnapshot(openAt).dataStatusLabel).toBe(copy("ar", "data.failed"));
     expect(service.marketSnapshot(openAt).dataError).toBe("parse failed");
     let reads = 0;
     let release: () => void = () => undefined;

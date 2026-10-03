@@ -147,7 +147,12 @@ export class LonoraService {
         !clock.isOpen || this.lastDataStatus === "stale" || this.lastDataStatus === "unavailable",
       invented: false,
       dataStatus: clock.isOpen ? this.lastDataStatus : "closed",
-      dataError: this.lastDataError,
+      dataStatusLabel: dataStatusCopy(
+        owner.language,
+        clock.isOpen ? this.lastDataStatus : "closed",
+      ),
+      dataError: clock.isOpen ? this.lastDataError : null,
+      dataErrorLabel: clock.isOpen ? dataErrorCopy(owner.language, this.lastDataError) : null,
       assessment: this.marketAssessment(owner.language),
       calendar: this.lastCalendar,
       headlines: this.lastHeadlines,
@@ -1343,6 +1348,39 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
   }
   const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
   return ruleText ? `${ruleText} ${bandText}` : bandText;
+}
+
+function dataStatusCopy(language: OwnerLanguage, status: string): string {
+  switch (status) {
+    case "ok":
+      return copy(language, "data.live");
+    case "stale":
+      return copy(language, "data.stale");
+    case "unavailable":
+      return copy(language, "data.unavailable");
+    case "closed":
+      return copy(language, "data.closed");
+    case "failed":
+      return copy(language, "data.failed");
+    default:
+      return copy(language, "data.unknown");
+  }
+}
+
+function dataErrorCopy(language: OwnerLanguage, error: string | null): string | null {
+  if (!error) {
+    return null;
+  }
+  if (error === "Market data is unavailable.") {
+    return copy(language, "data.errorUnavailable");
+  }
+  if (error === "Candle data is stale.") {
+    return copy(language, "data.errorStale");
+  }
+  if (error === "Market monitor failed.") {
+    return copy(language, "data.errorFailed");
+  }
+  return error;
 }
 
 function taskClockLabel(

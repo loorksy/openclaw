@@ -30,7 +30,9 @@ type MarketSnapshot = {
   }[];
   responsibilities: { id: string; title: string; status: string; statusLabel?: string }[];
   dataStatus?: string;
+  dataStatusLabel?: string;
   dataError?: string | null;
+  dataErrorLabel?: string | null;
   assessment?: string | null;
   calendar?: { known: boolean; summary: string | null };
   headlines?: { known: boolean; summary: string | null };
@@ -367,10 +369,14 @@ class MarketPage extends OpenClawLightDomElement {
                     ${snapshot.clock.isOpen ? t("lonora.market.open") : t("lonora.market.closed")}
                   </dd>
                   <dt>${t("lonora.market.data")}</dt>
-                  <dd>${marketDataLabel(snapshot)}</dd>
+                  <dd>${snapshot.dataStatusLabel || marketDataLabel(snapshot)}</dd>
                   <dt>${t("lonora.market.price")}</dt>
                   <dd>${marketPriceLabel(snapshot)}</dd>
-                  ${snapshot.dataError ? html`<p role="status">${snapshot.dataError}</p>` : nothing}
+                  ${
+                    snapshot.dataErrorLabel || snapshot.dataError
+                      ? html`<p role="status">${snapshot.dataErrorLabel || snapshot.dataError}</p>`
+                      : nothing
+                  }
                   <dt>${t("lonora.market.assessment")}</dt>
                   <dd>${snapshot.assessment ?? t("lonora.market.chartUnavailable")}</dd>
                   <dt>${t("lonora.market.calendar")}</dt>
