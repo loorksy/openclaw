@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { describeActivationRule, parseActivationRule } from "./domain/activation-rule.js";
 import {
   assertDelegation,
   runSpecialist,
@@ -302,6 +303,14 @@ export class LonoraService {
     this.lastDataError = message.slice(0, 180);
   }
 
+  listRecommendations() {
+    const language = this.store.ensureLocalOwner().language;
+    return this.store.listRecommendations().map((plan) => ({
+      ...plan,
+      activationSummary: activationSummary(plan, language),
+    }));
+  }
+
   saveRecommendation(plan: RecommendationPlan) {
     if (!isGoldSymbol(plan.symbol)) {
       throw new Error("Lonora recommendations are for XAUUSD.");
@@ -346,6 +355,7 @@ export class LonoraService {
         tp1HitAt: evaluation.tp1HitAt,
         tp2HitAt: evaluation.tp2HitAt,
         tp3HitAt: evaluation.tp3HitAt,
+        activationEvidence: evaluation.activationEvidence ?? plan.activationEvidence,
       };
       this.store.saveRecommendation(next);
       updated.push(next);
@@ -539,6 +549,14 @@ export class LonoraService {
     }
     return { ok: false as const, code: "not_linked" as const, brokerCalled: false };
   }
+}
+
+function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): string | null {
+  if (plan.activationUnreadable) {
+    return copy(language, "recommendations.unreadable");
+  }
+  const rule = plan.activationRule ? parseActivationRule(plan.activationRule) : null;
+  return rule ? describeActivationRule(rule, language) : null;
 }
 
 function purposeFor(agent: SpecialistId): string {

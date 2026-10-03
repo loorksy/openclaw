@@ -122,6 +122,49 @@ describe("recommendations", () => {
     expect(evaluation.outcome).toBe("win_tp1");
   });
 
+  it("does not fill a close rule on a wick through the level", () => {
+    const evaluation = evaluateRecommendation(
+      plan({
+        activationRule: { kind: "candle_close_above", level: 2300, timeframe: "1h" },
+      }),
+      [{ time: 2_000, open: 2296, high: 2310, low: 2288, close: 2298 }],
+    );
+    expect(evaluation.triggered).toBe(false);
+    expect(evaluation.outcome).toBe("pending");
+  });
+
+  it("fills a close rule at the confirming close and grades the stop later", () => {
+    const confirming = { time: 2_000, open: 2298, high: 2312, low: 2288, close: 2304 };
+    const held = evaluateRecommendation(
+      plan({
+        activationRule: { kind: "candle_close_above", level: 2300, timeframe: "1h" },
+      }),
+      [confirming],
+    );
+    expect(held.triggered).toBe(true);
+    expect(held.effectiveEntry).toBe(2304);
+    expect(held.outcome).toBe("pending");
+    const stopped = evaluateRecommendation(
+      {
+        ...plan({
+          activationRule: { kind: "candle_close_above", level: 2300, timeframe: "1h" },
+        }),
+        status: held.status,
+        triggeredAt: held.triggeredAt,
+        effectiveEntry: held.effectiveEntry,
+      },
+      [confirming, { time: 3_000, open: 2304, high: 2306, low: 2280, close: 2284 }],
+    );
+    expect(stopped.outcome).toBe("loss");
+  });
+
+  it("does not touch-fill a plan whose activation rule cannot be read", () => {
+    const evaluation = evaluateRecommendation(plan({ activationUnreadable: true }), [
+      candle(2_000, 2290, 2310, 2305),
+    ]);
+    expect(evaluation.triggered).toBe(false);
+  });
+
   it("does not reopen a terminal plan", () => {
     const evaluation = evaluateRecommendation(plan({ outcome: "loss", status: "sl_hit" }), [
       candle(4_000, 2400, 2410, 2405),
@@ -492,6 +535,60 @@ describe("delegation and migration", () => {
     expect(occupied.getOwner()?.id).toBe("keep");
     expect(occupied.listRecommendations()).toHaveLength(0);
     occupied.close();
+  });
+
+  it("keeps a readable Boty activation rule and blocks an unreadable one", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "boty-rule-")), "boty.sqlite");
+    const source = new DatabaseSync(file);
+    source.exec(`
+      CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);
+      CREATE TABLE trading_settings (user_id INTEGER, language TEXT, telegram_chat_id TEXT);
+      CREATE TABLE recommendations (
+        id INTEGER, user_id INTEGER, symbol TEXT, direction TEXT, entry REAL,
+        stop_loss REAL, targets_json TEXT, rationale TEXT, confidence INTEGER, status TEXT,
+        activation_rule_json TEXT
+      );
+      CREATE TABLE semantic_memories (
+        id INTEGER, user_id INTEGER, content TEXT, memory_type TEXT, symbol TEXT, archived INTEGER
+      );
+    `);
+    source.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(7, "owner@example.com");
+    source
+      .prepare(
+        "INSERT INTO trading_settings (user_id, language, telegram_chat_id) VALUES (?, ?, ?)",
+      )
+      .run(7, "en", null);
+    const rule = JSON.stringify({ kind: "candle_close_above", level: 2300, timeframe: "1h" });
+    source
+      .prepare(
+        "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, activation_rule_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(1, 7, "XAUUSD", "buy", 2300, 2290, "[2320]", "close", 70, "pending_entry", rule);
+    source
+      .prepare(
+        "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, activation_rule_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(2, 7, "XAUUSD", "buy", 2300, 2290, "[2320]", "bad", 70, "pending_entry", "{");
+    source.close();
+    const target = LonoraStore.open(":memory:");
+    const applied = planBotyMigration({ sourcePath: file, target, apply: true });
+    expect(applied.warnings.join(" ")).toMatch(/could not be read/);
+    const plans = target.listRecommendations();
+    expect(plans.find((item) => item.id === "boty-1")?.activationRule).toMatchObject({
+      kind: "candle_close_above",
+      level: 2300,
+    });
+    expect(plans.find((item) => item.id === "boty-1")?.entryType).toBe("confirmation_close");
+    expect(plans.find((item) => item.id === "boty-2")?.activationUnreadable).toBe(true);
+    const service = new LonoraService(target);
+    service.gradeRecommendations([
+      { time: Date.now() + 60_000, open: 2290, high: 2310, low: 2288, close: 2295 },
+    ]);
+    expect(target.listRecommendations().every((item) => item.outcome === "pending")).toBe(true);
+    expect(
+      service.listRecommendations().find((item) => item.id === "boty-1")?.activationSummary,
+    ).toMatch(/2300/);
+    target.close();
   });
 });
 

@@ -4,6 +4,7 @@
  * Does not delete the source database.
  */
 import { DatabaseSync } from "node:sqlite";
+import { activationRequiresClose, parseActivationRule } from "./domain/activation-rule.js";
 import { isGoldSymbol } from "./domain/candles.js";
 import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js";
 import type {
@@ -50,22 +51,7 @@ export function planBotyMigration(input: {
     const settings = source
       .prepare("SELECT language, telegram_chat_id FROM trading_settings WHERE user_id = ?")
       .get(user.id) as { language: string | null; telegram_chat_id: string | null } | undefined;
-    const recommendations = source
-      .prepare(
-        `SELECT id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status
-         FROM recommendations WHERE user_id = ?`,
-      )
-      .all(user.id) as {
-      id: number;
-      symbol: string;
-      direction: string | null;
-      entry: number | null;
-      stop_loss: number | null;
-      targets_json: string;
-      rationale: string | null;
-      confidence: number;
-      status: string;
-    }[];
+    const recommendations = loadRecommendations(source, user.id);
     const memories = source
       .prepare(
         `SELECT id, content, memory_type, symbol FROM semantic_memories
@@ -93,6 +79,13 @@ export function planBotyMigration(input: {
     const foreign = recommendations.filter((row) => !isGoldSymbol(row.symbol ?? ""));
     if (foreign.length > 0) {
       report.warnings.push(`${foreign.length} recommendations are not XAUUSD and will be skipped.`);
+    }
+    for (const row of recommendations) {
+      if (unreadableRule(row.activation_rule_json)) {
+        report.warnings.push(
+          `Recommendation ${row.id} has an activation rule that could not be read. It will not fill.`,
+        );
+      }
     }
     if (input.apply !== true) {
       return report;
@@ -124,11 +117,12 @@ export function planBotyMigration(input: {
         }
         const targets = parseTargets(row.targets_json);
         const createdAt = recommendationCreatedAt(source, row.id, importedAt);
+        const rule = parseActivationRule(row.activation_rule_json);
         const plan: RecommendationPlan = {
           id: `boty-${row.id}`,
           symbol: "XAUUSD",
           direction: row.direction,
-          entryType: "limit_touch",
+          entryType: rule && activationRequiresClose(rule) ? "confirmation_close" : "limit_touch",
           entry: row.entry,
           stopLoss: row.stop_loss,
           targets,
@@ -138,6 +132,8 @@ export function planBotyMigration(input: {
           createdAt,
           rationale: row.rationale ?? undefined,
           confidence: row.confidence,
+          ...(rule ? { activationRule: rule } : {}),
+          ...(unreadableRule(row.activation_rule_json) ? { activationUnreadable: true } : {}),
         };
         input.target.saveRecommendation(plan);
       }
@@ -154,6 +150,34 @@ export function planBotyMigration(input: {
   } finally {
     source.close();
   }
+}
+
+function loadRecommendations(source: DatabaseSync, userId: number) {
+  const columns = source.prepare("PRAGMA table_info(recommendations)").all() as { name: string }[];
+  const ruleSql = columns.some((column) => column.name === "activation_rule_json")
+    ? "activation_rule_json"
+    : "NULL AS activation_rule_json";
+  return source
+    .prepare(
+      `SELECT id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, ${ruleSql}
+       FROM recommendations WHERE user_id = ?`,
+    )
+    .all(userId) as {
+    id: number;
+    symbol: string;
+    direction: string | null;
+    entry: number | null;
+    stop_loss: number | null;
+    targets_json: string;
+    rationale: string | null;
+    confidence: number;
+    status: string;
+    activation_rule_json: string | null;
+  }[];
+}
+
+function unreadableRule(value: string | null): boolean {
+  return typeof value === "string" && value.trim().length > 0 && parseActivationRule(value) == null;
 }
 
 function importedLifecycle(

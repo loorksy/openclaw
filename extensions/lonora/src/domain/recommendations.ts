@@ -2,7 +2,16 @@
  * Deterministic recommendation lifecycle. No model calls and no order routing.
  * The creation candle never fills or stops a plan. Same-candle stop and target
  * resolve stop-first until a target was already banked.
+ * A stored activation rule gates the fill. A close-based rule is born at the
+ * confirming close, so that candle's wick is not graded as the trade.
  */
+import {
+  activationRequiresClose,
+  createActivationEvaluator,
+  parseActivationRule,
+  type ActivationEvidence,
+  type ActivationRule,
+} from "./activation-rule.js";
 
 export type RecommendationStatus =
   | "pending_entry"
@@ -49,6 +58,10 @@ export interface RecommendationPlan {
   tp3HitAt?: number;
   rationale?: string;
   confidence?: number;
+  activationRule?: ActivationRule;
+  /** The stored rule could not be read, so the plan must not fill on a touch. */
+  activationUnreadable?: boolean;
+  activationEvidence?: ActivationEvidence;
 }
 
 export interface TrackerCandle {
@@ -71,6 +84,7 @@ export interface Evaluation {
   tp3HitAt?: number;
   slHitAt?: number;
   missedWithoutFill?: boolean;
+  activationEvidence?: ActivationEvidence;
   changed: boolean;
 }
 
@@ -113,8 +127,7 @@ function filled(
     return { filled: true, price: plan.effectiveEntry ?? plan.entry };
   }
   if (plan.entryType === "limit_touch") {
-    const touched =
-      plan.direction === "buy" ? candle.low <= plan.entry : candle.high >= plan.entry;
+    const touched = plan.direction === "buy" ? candle.low <= plan.entry : candle.high >= plan.entry;
     return touched ? { filled: true, price: plan.entry } : { filled: false };
   }
   const confirmed =
@@ -141,7 +154,18 @@ export function evaluateRecommendation(
   if (isTerminal(plan.outcome)) {
     return base;
   }
-  const mode = plan.invalidationMode ?? (plan.entryType === "market" ? "touch" : "close");
+  const parsedRule = plan.activationUnreadable
+    ? "blocked"
+    : plan.activationRule
+      ? (parseActivationRule(plan.activationRule) ?? "blocked")
+      : null;
+  const activation =
+    parsedRule && parsedRule !== "blocked" ? createActivationEvaluator(parsedRule) : null;
+  const closeFill =
+    parsedRule && parsedRule !== "blocked" ? activationRequiresClose(parsedRule) : false;
+  const mode =
+    plan.invalidationMode ??
+    (parsedRule ? "close" : plan.entryType === "market" ? "touch" : "close");
   const targets = plan.targets.slice(0, 3);
   const future = candles
     .filter((candle) => candle.time > plan.createdCandleTime)
@@ -159,11 +183,10 @@ export function evaluateRecommendation(
   let slHitAt: number | undefined;
   let ambiguous = false;
   let missedWithoutFill = false;
+  let armedBefore = false;
+  let activationEvidence: ActivationEvidence | undefined;
 
-  const finish = (
-    status: RecommendationStatus,
-    outcome: RecommendationOutcome,
-  ): Evaluation => ({
+  const finish = (status: RecommendationStatus, outcome: RecommendationOutcome): Evaluation => ({
     status,
     outcome,
     triggered,
@@ -175,22 +198,58 @@ export function evaluateRecommendation(
     tp3HitAt: tpAt[3],
     slHitAt,
     missedWithoutFill: missedWithoutFill || undefined,
+    activationEvidence,
     changed: true,
   });
 
   for (const candle of future) {
     if (!triggered) {
-      if (targets[0] != null && targetHit(plan.direction, candle, targets[0])) {
-        missedWithoutFill = true;
-        return finish("expired", "expired");
+      if (parsedRule === "blocked") {
+        if (targets[0] != null && targetHit(plan.direction, candle, targets[0])) {
+          missedWithoutFill = true;
+          return finish("expired", "expired");
+        }
+        continue;
       }
-      const fill = filled(plan, candle);
+      const wasArmed = armedBefore;
+      let conditionMet = true;
+      if (activation) {
+        const observation = activation.observe(candle);
+        conditionMet = observation.activated;
+        if (observation.evidence) {
+          activationEvidence = observation.evidence;
+        }
+      }
+      const fill = closeFill
+        ? conditionMet && !wasArmed
+          ? { filled: true, price: candle.close }
+          : { filled: false }
+        : !activation || conditionMet || wasArmed
+          ? filled(plan, candle)
+          : { filled: false };
+      if (activation && conditionMet) {
+        armedBefore = true;
+      }
       if (!fill.filled) {
+        if (targets[0] != null && targetHit(plan.direction, candle, targets[0])) {
+          missedWithoutFill = true;
+          return finish("expired", "expired");
+        }
         continue;
       }
       triggered = true;
       triggeredAt = candle.time;
       effectiveEntry = fill.price ?? plan.entry;
+      if (closeFill) {
+        continue;
+      }
+    }
+    if (
+      triggeredAt != null &&
+      candle.time === triggeredAt &&
+      (closeFill || plan.entryType === "confirmation_close")
+    ) {
+      continue;
     }
     const stopped = stopHit(plan.direction, candle, plan.stopLoss, mode);
     let reachedNow = 0;
@@ -242,6 +301,7 @@ export function evaluateRecommendation(
     tp1HitAt: tpAt[1],
     tp2HitAt: tpAt[2],
     tp3HitAt: tpAt[3],
+    activationEvidence,
     changed: status !== plan.status || effectiveEntry !== plan.effectiveEntry,
   };
 }

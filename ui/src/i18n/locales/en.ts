@@ -4803,6 +4803,7 @@ export const en: TranslationMap & {
       entry: "Entry",
       stop: "Stop",
       targets: "Targets",
+      activation: "Activation",
     },
     tasks: {
       lead: "Responsibilities keep running after you close the browser.",

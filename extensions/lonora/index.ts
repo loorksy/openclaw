@@ -247,7 +247,7 @@ export default definePluginEntry({
         if (params.action === "grade") {
           return current.gradeLiveRecommendations();
         }
-        return current.store.listRecommendations();
+        return current.listRecommendations();
       },
     );
     tool(
@@ -390,7 +390,7 @@ export default definePluginEntry({
     );
     api.registerGatewayMethod(
       "lonora.recommendations.list",
-      handle(() => requireService().store.listRecommendations()),
+      handle(() => requireService().listRecommendations()),
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(

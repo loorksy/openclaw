@@ -19,6 +19,7 @@ type Recommendation = {
   status: string;
   outcome: string;
   rationale?: string;
+  activationSummary?: string | null;
 };
 
 class RecommendationsPage extends OpenClawLightDomElement {
@@ -118,6 +119,13 @@ class RecommendationsPage extends OpenClawLightDomElement {
                         ${t("lonora.recommendations.targets")}
                         ${targets.length ? targets.join(", ") : t("common.na")}
                       </div>
+                      ${
+                        plan.activationSummary
+                          ? html`<p>
+                              ${t("lonora.recommendations.activation")} ${plan.activationSummary}
+                            </p>`
+                          : nothing
+                      }
                       ${plan.rationale ? html`<p>${plan.rationale}</p>` : nothing}
                     </li>
                   `;

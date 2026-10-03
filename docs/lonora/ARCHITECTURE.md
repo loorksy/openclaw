@@ -20,6 +20,7 @@ Lonora is a private, single-owner gold market operator. This repository is a for
 | Public registration, orgs, billing, credits                               | REMOVE from the owner experience. No second account path is added     |
 | Boty custom gateway, scheduler, and sub-agent framework                   | REMOVE. Not ported                                                    |
 | Boty gold detectors, sessions, recommendation grading, execution boundary | REPLACE the missing domain                                            |
+| Boty activation rules                                                     | REPLACE. A stored rule gates the fill; a close is not a wick touch    |
 
 ## Dependency risks
 
@@ -31,7 +32,7 @@ Lonora is a private, single-owner gold market operator. This repository is a for
 
 ## One owner
 
-The Lonora store holds one owner row. A Boty migration with more than one user fails until `--owner` is explicit, and a dry run writes nothing. An automatic local placeholder with no recommendations or memories can be replaced by that explicit owner. Imported plans keep a real created time so historical candles are not graded as if the plan started at epoch. Web, Telegram binding, tasks, memory, and settings use that row.
+The Lonora store holds one owner row. A Boty migration with more than one user fails until `--owner` is explicit, and a dry run writes nothing. An automatic local placeholder with no recommendations or memories can be replaced by that explicit owner. Imported plans keep a real created time so historical candles are not graded as if the plan started at epoch. A readable `activation_rule_json` is kept and gates later grading. An unreadable rule is imported as blocked, so it cannot fill on a touch. Web, Telegram binding, tasks, memory, and settings use that row.
 
 ## Monitoring
 

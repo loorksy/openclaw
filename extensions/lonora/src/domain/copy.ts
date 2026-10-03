@@ -21,6 +21,8 @@ const COPY = {
     "tasks.scheduleRejected":
       "The scheduler did not accept this briefing. The monitor will still check it.",
     "trade.blocked": "Lonora will not place that trade. Only you can confirm an order.",
+    "recommendations.unreadable":
+      "The stored activation rule could not be read, so this plan will not fill.",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -41,6 +43,7 @@ const COPY = {
     "tasks.scheduled": "مجدول",
     "tasks.scheduleRejected": "المجدول لم يقبل الإحاطة. المراقبة ستستمر في فحصها.",
     "trade.blocked": "لونورا لن تنفّذ هذه الصفقة. التأكيد اليدوي لك وحدك.",
+    "recommendations.unreadable": "تعذر قراءة شرط التفعيل المخزّن، لذلك لن تُملأ هذه الخطة.",
   },
 } as const;
 
