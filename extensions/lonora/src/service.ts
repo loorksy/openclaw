@@ -3,6 +3,7 @@ import { describeActivationRule, parseActivationRule } from "./domain/activation
 import {
   assertDelegation,
   MAX_CHILD_RUNS,
+  runRiskReviewer,
   runSpecialist,
   runStructureAnalyst,
   SPECIALISTS,
@@ -835,6 +836,18 @@ export class LonoraService {
       lines.push(
         `${copy(language, "memory.plans")} ${plans.map((plan) => planLine(language, plan)).join("; ")}`,
       );
+      const newest = [...plans].sort((left, right) => right.createdAt - left.createdAt)[0];
+      if (newest) {
+        const review = runRiskReviewer({
+          entry: newest.entry,
+          stopLoss: newest.stopLoss,
+          targets: newest.targets,
+          language,
+        });
+        if (review.ok) {
+          lines.push(`${copy(language, "memory.risk")} ${review.summary}`);
+        }
+      }
     }
     if (tasks.length > 0) {
       lines.push(`${copy(language, "memory.tasks")} ${tasks.map((row) => row.title).join("; ")}`);

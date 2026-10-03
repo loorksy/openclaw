@@ -721,6 +721,8 @@ describe("responsibilities, memory, usage", () => {
     ).toBe(240);
     expect(empty.recall("What changed", "conversation")).toEqual([]);
     expect(empty.ownerBrief()).toContain("Open plans: buy 2311, stop 2291, target 2400");
+    expect(empty.ownerBrief()).toContain("Plan grade: First target is 4.45R.");
+    expect(empty.ownerBrief()).toContain("The spread was not read");
     expect(empty.ownerBrief()).not.toMatch(/%/);
     expect(empty.ownerBrief()).not.toContain("closed-plan");
     const note = `New York continuation   ${"x".repeat(400)}`;
@@ -741,6 +743,8 @@ describe("responsibilities, memory, usage", () => {
     );
     expect(empty.ownerBrief()).toContain("الدرس العربي");
     expect(empty.ownerBrief()).toContain("خطط مفتوحة: شراء 2311, وقف 2291, هدف 2400");
+    expect(empty.ownerBrief()).toContain("درجة الخطة: الهدف الأول 4.45R.");
+    expect(empty.ownerBrief()).toContain("السبريد لم يُقرأ");
     expect(empty.ownerBrief()).toContain("آخر طلب: Next");
     empty.store.close();
     second.store.close();
