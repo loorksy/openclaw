@@ -43,9 +43,7 @@ export function planBotyMigration(input: {
     );
     const user = users.find((candidate) => String(candidate.id) === selected.id)!;
     const settings = source
-      .prepare(
-        "SELECT language, telegram_chat_id FROM trading_settings WHERE user_id = ?",
-      )
+      .prepare("SELECT language, telegram_chat_id FROM trading_settings WHERE user_id = ?")
       .get(user.id) as { language: string | null; telegram_chat_id: string | null } | undefined;
     const recommendations = source
       .prepare(
@@ -90,7 +88,8 @@ export function planBotyMigration(input: {
     if (input.apply !== true) {
       return report;
     }
-    input.target.insertOwner({
+    const importedAt = Date.now();
+    input.target.adoptOwner({
       id: String(user.id),
       label: user.email,
       language,
@@ -98,10 +97,15 @@ export function planBotyMigration(input: {
       source: "migration",
     });
     for (const row of recommendations) {
-      if (row.entry == null || row.stop_loss == null || (row.direction !== "buy" && row.direction !== "sell")) {
+      if (
+        row.entry == null ||
+        row.stop_loss == null ||
+        (row.direction !== "buy" && row.direction !== "sell")
+      ) {
         continue;
       }
       const targets = parseTargets(row.targets_json);
+      const createdAt = recommendationCreatedAt(source, row.id, importedAt);
       const plan: RecommendationPlan = {
         id: `boty-${row.id}`,
         symbol: "XAUUSD",
@@ -112,8 +116,8 @@ export function planBotyMigration(input: {
         targets,
         status: "pending_entry",
         outcome: "pending",
-        createdCandleTime: 0,
-        createdAt: Date.now(),
+        createdCandleTime: createdAt,
+        createdAt,
         rationale: row.rationale ?? undefined,
         confidence: row.confidence,
       };
@@ -131,6 +135,30 @@ export function planBotyMigration(input: {
   } finally {
     source.close();
   }
+}
+
+function recommendationCreatedAt(source: DatabaseSync, rowId: number, importedAt: number): number {
+  const columns = source.prepare("PRAGMA table_info(recommendations)").all() as { name: string }[];
+  const names = new Set(columns.map((column) => column.name));
+  const column = ["created_candle_time", "created_at", "createdAt"].find((name) => names.has(name));
+  if (!column) {
+    return importedAt;
+  }
+  const row = source
+    .prepare(`SELECT ${column} AS created FROM recommendations WHERE id = ?`)
+    .get(rowId) as { created: unknown } | undefined;
+  return candleTime(row?.created, importedAt);
+}
+
+function candleTime(value: unknown, fallback: number): number {
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return value < 1_000_000_000_000 ? Math.trunc(value * 1000) : Math.trunc(value);
 }
 
 function parseTargets(value: string): number[] {

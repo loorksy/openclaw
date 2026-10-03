@@ -251,7 +251,7 @@ export function runSpecialist(
         summary: "Checked delegation limits and the trade-execution boundary.",
         data: {
           tradeExecution: "owner-confirmed-only",
-          maxDepth: 2,
+          maxDepth: 1,
           maxChildren: 4,
         },
       };

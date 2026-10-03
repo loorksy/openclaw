@@ -1,20 +1,20 @@
-import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { runSpecialist } from "./domain/agents.js";
 import type { Candle } from "./domain/candles.js";
 import { detectSwings, detectTrend } from "./domain/candles.js";
 import { copy } from "./domain/copy.js";
-import { candlesVisibleAt, isGoldMarketOpenAt, readMarketClock } from "./domain/market.js";
 import { readGoldCandles } from "./domain/market-data.js";
-import { decideMonitorAction, shouldNotify } from "./domain/monitor.js";
+import { candlesVisibleAt, isGoldMarketOpenAt, readMarketClock } from "./domain/market.js";
+import { decideMonitorAction, nextNotice, shouldNotify } from "./domain/monitor.js";
 import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js";
-import { authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
+import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
 import { probeProvider } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
-import { estimateCostUsd, rollupUsage } from "./domain/usage.js";
+import { dailyBudgetAllows, estimateCostUsd, rollupUsage } from "./domain/usage.js";
 import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
@@ -178,6 +178,14 @@ describe("monitor", () => {
       ),
     ).toBe(true);
   });
+
+  it("backs off a failed notice instead of retrying on the next tick", () => {
+    const failed = nextNotice(null, "structure", 1_000, false);
+    expect(failed.status).toBe("failed");
+    expect(failed.cooldownUntil).toBeGreaterThan(1_000);
+    expect(shouldNotify(failed, 1_000)).toBe(false);
+    expect(shouldNotify(failed, failed.cooldownUntil)).toBe(true);
+  });
 });
 
 describe("trade boundary", () => {
@@ -196,7 +204,7 @@ describe("trade boundary", () => {
     expect(authorizeTrade({ caller: "owner", ownerConfirmed: true }).ok).toBe(true);
   });
 
-  it("blocks coding tools and scheduled execution", () => {
+  it("blocks coding tools and ignores a model confirmation flag", () => {
     expect(blockReasonForTool({ toolName: "exec" })).toMatch(/shell/);
     expect(
       blockReasonForTool({
@@ -205,6 +213,15 @@ describe("trade boundary", () => {
         ownerConfirmed: true,
       }),
     ).toMatch(/cannot place trades/);
+    expect(blockReasonForTool({ toolName: "lonora_execute_trade", ownerConfirmed: true })).toMatch(
+      /cannot place trades/,
+    );
+    expect(blockReasonForTool({ toolName: "lonora_notify", ownerConfirmed: true })).toMatch(
+      /market monitor/,
+    );
+    expect(() =>
+      assertPermission({ permission: "NOTIFY", caller: "model", ownerConfirmed: false }),
+    ).toThrow(/owner confirmation/);
   });
 });
 
@@ -231,8 +248,7 @@ describe("owner and providers", () => {
     const rejected = await probeProvider({
       provider: "openai",
       apiKey: secret,
-      fetchImpl: (async () =>
-        new Response(`bad key ${secret}`, { status: 401 })) as typeof fetch,
+      fetchImpl: (async () => new Response(`bad key ${secret}`, { status: 401 })) as typeof fetch,
     });
     expect(rejected.connected).toBe(false);
     expect(rejected.error).toBe("The API key was rejected.");
@@ -308,12 +324,14 @@ describe("responsibilities, memory, usage", () => {
     expect(summary.byFeature.conversation).toBeGreaterThan(0);
     expect(summary.byFeature.market_monitoring).toBeGreaterThan(0);
     expect(summary.byAgent["market-watcher"]).toBeGreaterThan(0);
-    expect(estimateCostUsd({
-      provider: "anthropic",
-      model: "claude-sonnet-4-5",
-      inputTokens: 1_000_000,
-      outputTokens: 0,
-    }).usd).toBe(3);
+    expect(
+      estimateCostUsd({
+        provider: "anthropic",
+        model: "claude-sonnet-4-5",
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+      }).usd,
+    ).toBe(3);
     expect(rollupUsage([], Date.now()).tokensToday).toBe(0);
     store.close();
   });
@@ -349,13 +367,21 @@ describe("delegation and migration", () => {
     `);
     source.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(1, "a@example.com");
     source.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(2, "b@example.com");
-    source.prepare("INSERT INTO trading_settings (user_id, language, telegram_chat_id) VALUES (?, ?, ?)").run(1, "ar", "555");
-    source.prepare(
-      "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(9, 1, "XAUUSD", "buy", 2300, 2290, "[2310]", "trend", 60, "active");
-    source.prepare(
-      "INSERT INTO semantic_memories (id, user_id, content, memory_type, symbol, archived) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(3, 1, "London open fade", "lesson", "XAUUSD", 0);
+    source
+      .prepare(
+        "INSERT INTO trading_settings (user_id, language, telegram_chat_id) VALUES (?, ?, ?)",
+      )
+      .run(1, "ar", "555");
+    source
+      .prepare(
+        "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(9, 1, "XAUUSD", "buy", 2300, 2290, "[2310]", "trend", 60, "active");
+    source
+      .prepare(
+        "INSERT INTO semantic_memories (id, user_id, content, memory_type, symbol, archived) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(3, 1, "London open fade", "lesson", "XAUUSD", 0);
     source.close();
     const target = LonoraStore.open(":memory:");
     expect(() => planBotyMigration({ sourcePath: file, target })).toThrow(OwnerSelectionRequired);
@@ -367,8 +393,36 @@ describe("delegation and migration", () => {
     expect(applied.language).toBe("ar");
     expect(target.getOwner()?.telegramChatId).toBe("555");
     expect(target.listRecommendations()).toHaveLength(1);
+    expect(target.listRecommendations()[0]?.createdCandleTime).toBeGreaterThan(0);
     expect(target.searchMemory("London")[0]?.kind).toBe("lesson");
     target.close();
+
+    const placeholder = LonoraStore.open(":memory:");
+    placeholder.ensureLocalOwner();
+    const replaced = planBotyMigration({
+      sourcePath: file,
+      target: placeholder,
+      ownerId: "1",
+      apply: true,
+    });
+    expect(replaced.ownerId).toBe("1");
+    expect(placeholder.getOwner()).toMatchObject({ id: "1", source: "migration", language: "ar" });
+    placeholder.close();
+
+    const occupied = LonoraStore.open(":memory:");
+    occupied.insertOwner({
+      id: "keep",
+      label: "Keep",
+      language: "en",
+      telegramChatId: null,
+      source: "explicit",
+    });
+    expect(() =>
+      planBotyMigration({ sourcePath: file, target: occupied, ownerId: "1", apply: true }),
+    ).toThrow(/second account/);
+    expect(occupied.getOwner()?.id).toBe("keep");
+    expect(occupied.listRecommendations()).toHaveLength(0);
+    occupied.close();
   });
 });
 
@@ -424,6 +478,88 @@ describe("manual execution", () => {
       code: "not_linked",
       brokerCalled: false,
     });
+    expect(() => service.notifyOwner("alert", "structure changed")).toThrow(/owner confirmation/);
+    store.close();
+  });
+
+  it("grades closed candles from the market read and ignores a caller-supplied series", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const createdCandleTime = 1_800_000_000_000;
+    service.saveRecommendation(plan({ createdCandleTime, createdAt: createdCandleTime }));
+    service.readCandles = async () => ({
+      ok: true,
+      candles: [
+        {
+          time: createdCandleTime - 60_000,
+          open: 2400,
+          high: 2500,
+          low: 2200,
+          close: 2450,
+        },
+      ],
+      price: 2450,
+      stale: false,
+      invented: false,
+    });
+    const graded = await service.gradeLiveRecommendations(createdCandleTime + 3_600_000);
+    expect(graded.ok).toBe(true);
+    expect(graded.updated).toEqual([]);
+    expect(store.listRecommendations()[0]?.outcome).toBe("pending");
+    const forced = service.gradeRecommendations([
+      {
+        time: createdCandleTime + 60_000,
+        open: 2300,
+        high: 2360,
+        low: 2295,
+        close: 2340,
+      },
+    ]);
+    expect(forced[0]?.outcome).not.toBe("pending");
+    store.close();
+  });
+
+  it("skips specialist work when today's usage has no price", async () => {
+    const openAt = Date.parse("2026-01-05T15:00:00Z");
+    expect(isGoldMarketOpenAt(openAt)).toBe(true);
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    service.dailyBudgetUsd = 5;
+    store.saveObservation({
+      candleTime: 1,
+      price: 2300,
+      session: "asia",
+      marketOpen: true,
+      atr: 1,
+      structureEventKey: "none",
+      recommendationFingerprint: "previous",
+    });
+    service.saveRecommendation(plan());
+    service.readCandles = async () => ({
+      ok: true,
+      candles: risingCandles(20),
+      price: 2320,
+      stale: false,
+      invented: false,
+    });
+    store.addUsage({
+      id: "unpriced",
+      at: openAt,
+      provider: "unknown",
+      model: "unknown",
+      feature: "conversation",
+      agent: "lonora",
+      inputTokens: 10,
+      outputTokens: 10,
+      estimated: true,
+    });
+    expect(dailyBudgetAllows({ budgetUsd: 5, events: store.listUsage(), now: openAt })).toBe(false);
+    const result = await service.monitorOnce(openAt);
+    expect(result.decision.deepAnalysis).toBe(true);
+    expect(result.assessment).toBeNull();
+    service.recordMonitorFailure(new Error("parse failed"));
+    expect(service.marketSnapshot(openAt).dataStatus).toBe("failed");
+    expect(service.marketSnapshot(openAt).dataError).toBe("parse failed");
     store.close();
   });
 });

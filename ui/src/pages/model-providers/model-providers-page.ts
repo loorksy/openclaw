@@ -655,9 +655,9 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       credentialAgentLabel: selected ? normalizeAgentLabel(selected) : this.selectedAgentId,
       cards: noSelectableAgents
         ? []
-        : this.installedAgents.filterProviders(cards).filter((card) =>
-            ["anthropic", "openai", "zai", "openrouter"].includes(card.id),
-          ),
+        : this.installedAgents
+            .filterProviders(cards)
+            .filter((card) => ["anthropic", "openai", "zai", "openrouter"].includes(card.id)),
       configuredModels,
       decisionModels: catalog?.decisionModels ?? [],
       defaultModels: defaults,
@@ -677,7 +677,7 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       unconfiguredProviders: buildUnconfiguredProviderOptions(
         data.authStatus?.providerCapabilities,
         configuredProviderIds,
-      ),
+      ).filter((option) => ["anthropic", "openai", "zai", "openrouter"].includes(option.id)),
       canViewProfiles:
         gatewaySnapshot.phase === "connected" &&
         operatorAuth?.scopes !== undefined &&
@@ -695,7 +695,12 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       addProviderOpen: this.addProviderOpen,
       addProviderId: this.addProviderId,
       addProviderKey: this.addProviderKey,
-      installedAgents: this.installedAgents.render(cards, () => this.catalogDiscovery.retry()),
+      installedAgents: this.installedAgents.render(
+        this.installedAgents
+          .filterProviders(cards)
+          .filter((card) => ["anthropic", "openai", "zai", "openrouter"].includes(card.id)),
+        () => this.catalogDiscovery.retry(),
+      ),
       onRefresh: () =>
         void (rosterError
           ? this.context.agents.refreshList()

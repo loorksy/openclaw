@@ -38,7 +38,6 @@ export function lonoraToolDecision(input: {
   toolName: string;
   sessionKey?: string;
   jobId?: string;
-  ownerConfirmed?: boolean;
 }): { block: true; blockReason: string } | undefined {
   const blockReason = blockReasonForTool(input);
   return blockReason ? { block: true, blockReason } : undefined;

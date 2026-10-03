@@ -22,7 +22,10 @@ export interface MonitorDecision {
 
 const PRICE_MOVE_FRACTION = 0.0015;
 
-export function decideMonitorAction(previous: Observation | null, next: Observation): MonitorDecision {
+export function decideMonitorAction(
+  previous: Observation | null,
+  next: Observation,
+): MonitorDecision {
   if (!next.marketOpen) {
     const sessionChanged = previous != null && previous.session !== next.session;
     return {
@@ -63,19 +66,20 @@ export function decideMonitorAction(previous: Observation | null, next: Observat
   ) {
     reasons.push("volatility_change");
   }
-  if (
-    next.structureEventKey &&
-    next.structureEventKey !== previous.structureEventKey
-  ) {
+  if (next.structureEventKey && next.structureEventKey !== previous.structureEventKey) {
     reasons.push("structure_change");
   }
   if (next.recommendationFingerprint !== previous.recommendationFingerprint) {
     reasons.push("recommendation_change");
   }
   const meaningful = reasons.some((reason) =>
-    ["price_move", "session_transition", "volatility_change", "structure_change", "recommendation_change"].includes(
-      reason,
-    ),
+    [
+      "price_move",
+      "session_transition",
+      "volatility_change",
+      "structure_change",
+      "recommendation_change",
+    ].includes(reason),
   );
   const deepAnalysis = reasons.some((reason) =>
     ["structure_change", "recommendation_change", "volatility_change"].includes(reason),
@@ -85,7 +89,9 @@ export function decideMonitorAction(previous: Observation | null, next: Observat
     reasons: reasons.length > 0 ? reasons : ["unchanged"],
     deepAnalysis,
     notificationKeys: meaningful
-      ? reasons.map((reason) => `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`)
+      ? reasons.map(
+          (reason) => `${reason}:${next.candleTime ?? "none"}:${next.structureEventKey ?? ""}`,
+        )
       : [],
   };
 }
@@ -102,10 +108,14 @@ export function shouldNotify(record: NoticeRecord | null, now: number): boolean 
   if (!record) {
     return true;
   }
-  if (record.status === "delivered" && now < record.cooldownUntil) {
+  if (now < record.cooldownUntil) {
     return false;
   }
-  if (record.status === "pending" && record.lastAttemptAt != null && now - record.lastAttemptAt < 60_000) {
+  if (
+    record.status === "pending" &&
+    record.lastAttemptAt != null &&
+    now - record.lastAttemptAt < 60_000
+  ) {
     return false;
   }
   return record.status !== "delivered" || now >= record.cooldownUntil;
@@ -119,11 +129,12 @@ export function nextNotice(
   cooldownMs = 15 * 60_000,
 ): NoticeRecord {
   const attempts = (record?.attempts ?? 0) + 1;
+  const retryMs = Math.min(cooldownMs, 60_000 * attempts);
   return {
     key,
     status: delivered ? "delivered" : "failed",
     attempts,
     lastAttemptAt: now,
-    cooldownUntil: delivered ? now + cooldownMs : now,
+    cooldownUntil: delivered ? now + cooldownMs : now + retryMs,
   };
 }

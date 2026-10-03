@@ -131,14 +131,14 @@ export function renderChannels(props: ChannelsProps) {
                   (key) => key,
                   (key) => renderAvailableRow(key, props),
                 )}
-                ${renderBrowseAllRow(props)}`
+                ${props.ownerChannelKeys ? nothing : renderBrowseAllRow(props)}`
           }
         `,
       )}
       ${renderChannelPairingQueue(props)}
     `)}
     ${
-      selected
+      selected && (!props.ownerChannelKeys || props.ownerChannelKeys.includes(selected))
         ? renderChannelDetail({
             channelId: selected,
             label: resolveChannelLabel(props, selected),

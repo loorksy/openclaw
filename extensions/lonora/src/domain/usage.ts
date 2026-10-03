@@ -27,15 +27,14 @@ export interface UsageEvent {
   estimated: boolean;
 }
 
-export function estimateCostUsd(event: Pick<UsageEvent, "provider" | "model" | "inputTokens" | "outputTokens">): {
+export function estimateCostUsd(
+  event: Pick<UsageEvent, "provider" | "model" | "inputTokens" | "outputTokens">,
+): {
   usd: number | null;
   estimated: boolean;
 } {
   const key = `${event.provider}/${event.model}`;
-  const price =
-    PRICE_PER_MILLION[key] ??
-    PRICE_PER_MILLION[`${event.provider}/auto`] ??
-    null;
+  const price = PRICE_PER_MILLION[key] ?? PRICE_PER_MILLION[`${event.provider}/auto`] ?? null;
   if (!price) {
     return { usd: null, estimated: true };
   }
@@ -95,6 +94,23 @@ export function rollupUsage(events: UsageEvent[], now: number): UsageRollup {
     }
   }
   return rollup;
+}
+
+export function dailyBudgetAllows(input: {
+  budgetUsd: number | null;
+  events: UsageEvent[];
+  now: number;
+}): boolean {
+  if (input.budgetUsd == null) {
+    return true;
+  }
+  const dayStart = startOfUtcDay(input.now);
+  const today = input.events.filter((event) => event.at >= dayStart);
+  if (today.some((event) => estimateCostUsd(event).usd == null)) {
+    return false;
+  }
+  const cost = rollupUsage(input.events, input.now).costTodayUsd ?? 0;
+  return cost < input.budgetUsd;
 }
 
 export function classifyFeature(input: { sessionKey?: string; jobId?: string }): UsageFeature {

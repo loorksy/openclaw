@@ -125,13 +125,18 @@ export function readMarketClock(nowMs: number): MarketClock {
 }
 
 /** Closed markets may expose the last completed bar. They may not invent a newer one. */
-export function candlesVisibleAt(candles: { time: number }[], nowMs: number, barMs: number): {
-  candles: { time: number }[];
+export function candlesVisibleAt<T extends { time: number }>(
+  candles: T[],
+  nowMs: number,
+  barMs: number,
+): {
+  candles: T[];
   stale: boolean;
   invented: false;
 } {
   const closed = candles.filter((candle) => candle.time + barMs <= nowMs);
   const last = closed.at(-1);
-  const stale = !isGoldMarketOpenAt(nowMs) || (last != null && nowMs - (last.time + barMs) > barMs * 3);
+  const stale =
+    !isGoldMarketOpenAt(nowMs) || (last != null && nowMs - (last.time + barMs) > barMs * 3);
   return { candles: closed, stale, invented: false };
 }

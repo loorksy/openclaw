@@ -6,16 +6,26 @@ import {
   SPECIALISTS,
   type SpecialistId,
 } from "./domain/agents.js";
-import { calculateAtr, isGoldSymbol, type Candle } from "./domain/candles.js";
+import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
-import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
 import { GOLD_BAR_MS, readGoldCandles } from "./domain/market-data.js";
-import { decideMonitorAction, nextNotice, shouldNotify, type Observation } from "./domain/monitor.js";
+import { candlesVisibleAt, readMarketClock } from "./domain/market.js";
+import {
+  decideMonitorAction,
+  nextNotice,
+  shouldNotify,
+  type Observation,
+} from "./domain/monitor.js";
 import { bindTelegram } from "./domain/owner.js";
-import { authorizeTrade } from "./domain/permissions.js";
+import { assertPermission, authorizeTrade } from "./domain/permissions.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
-import { classifyFeature, rollupUsage, type UsageEvent } from "./domain/usage.js";
+import {
+  classifyFeature,
+  dailyBudgetAllows,
+  rollupUsage,
+  type UsageEvent,
+} from "./domain/usage.js";
 import { LonoraStore, type MemoryKind, type ResponsibilityRow } from "./store.js";
 
 export class LonoraService {
@@ -56,12 +66,15 @@ export class LonoraService {
       clock,
       message: marketReasonCopy(owner.language, clock.reason),
       lastPrice: observation?.price ?? null,
-      stale: !clock.isOpen || this.lastDataStatus === "stale" || this.lastDataStatus === "unavailable",
+      stale:
+        !clock.isOpen || this.lastDataStatus === "stale" || this.lastDataStatus === "unavailable",
       invented: false,
       dataStatus: clock.isOpen ? this.lastDataStatus : "closed",
       dataError: this.lastDataError,
       assessment: this.lastAssessment,
-      recommendations: this.store.listRecommendations().filter((plan) => plan.outcome === "pending"),
+      recommendations: this.store
+        .listRecommendations()
+        .filter((plan) => plan.outcome === "pending"),
       responsibilities: this.store.listResponsibilities().filter((row) => row.status === "running"),
     };
   }
@@ -178,11 +191,17 @@ export class LonoraService {
   }
 
   private withinBudget(now: number) {
-    if (this.dailyBudgetUsd == null) {
-      return true;
-    }
-    const cost = this.usageSummary(now).costTodayUsd ?? 0;
-    return cost < this.dailyBudgetUsd;
+    return dailyBudgetAllows({
+      budgetUsd: this.dailyBudgetUsd,
+      events: this.store.listUsage(),
+      now,
+    });
+  }
+
+  recordMonitorFailure(error: unknown) {
+    const message = error instanceof Error ? error.message : "Market monitor failed.";
+    this.lastDataStatus = "failed";
+    this.lastDataError = message.slice(0, 180);
   }
 
   saveRecommendation(plan: RecommendationPlan) {
@@ -193,7 +212,27 @@ export class LonoraService {
     return plan;
   }
 
-  gradeRecommendations(candles: { time: number; open: number; high: number; low: number; close: number }[]) {
+  async gradeLiveRecommendations(now = Date.now()) {
+    const read = await this.readCandles();
+    if (!read.ok) {
+      return {
+        ok: false as const,
+        updated: [] as RecommendationPlan[],
+        error: read.error ?? "Market data is unavailable.",
+      };
+    }
+    const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
+    const sane = visible.candles.filter((candle) => isSaneCandle(candle));
+    return {
+      ok: true as const,
+      updated: this.gradeRecommendations(sane),
+      stale: visible.stale,
+    };
+  }
+
+  gradeRecommendations(
+    candles: { time: number; open: number; high: number; low: number; close: number }[],
+  ) {
     const updated = [];
     for (const plan of this.store.listRecommendations()) {
       const evaluation = evaluateRecommendation(plan, candles);
@@ -214,6 +253,11 @@ export class LonoraService {
       updated.push(next);
     }
     return updated;
+  }
+
+  notifyOwner(_key: string, _message: string): never {
+    assertPermission({ permission: "NOTIFY", caller: "model", ownerConfirmed: false });
+    throw new Error("Model notifications require an owner path outside the model tool.");
   }
 
   remember(kind: MemoryKind, content: string, symbol?: string) {
@@ -340,13 +384,12 @@ export class LonoraService {
     return rollupUsage(this.store.listUsage(), now);
   }
 
-  async connectProvider(input: {
-    provider: string;
-    apiKey: string;
-    fetchImpl?: typeof fetch;
-  }) {
+  async connectProvider(input: { provider: string; apiKey: string; fetchImpl?: typeof fetch }) {
     if (!isLonoraProvider(input.provider)) {
-      return { ok: false as const, error: "Lonora only connects Anthropic, OpenAI, Z.AI, and OpenRouter." };
+      return {
+        ok: false as const,
+        error: "Lonora only connects Anthropic, OpenAI, Z.AI, and OpenRouter.",
+      };
     }
     const probe = await probeProvider({
       provider: input.provider as LonoraProviderId,
@@ -386,7 +429,10 @@ export class LonoraService {
     });
   }
 
-  confirmTrade(input: { caller: "owner" | "monitor" | "schedule" | "subagent" | "model" | "chat"; ownerConfirmed?: boolean }) {
+  confirmTrade(input: {
+    caller: "owner" | "monitor" | "schedule" | "subagent" | "model" | "chat";
+    ownerConfirmed?: boolean;
+  }) {
     const decision = authorizeTrade(input);
     if (!decision.ok) {
       return { ok: false as const, code: decision.code, brokerCalled: false };

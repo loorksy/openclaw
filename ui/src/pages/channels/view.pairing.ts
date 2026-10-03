@@ -24,8 +24,18 @@ function formatRequestTime(value: string): string {
   return Number.isFinite(time) ? formatRelativeTimestamp(time) : value;
 }
 
-function renderFilters(props: ChannelsProps) {
+function ownerAccounts(props: ChannelsProps): ChannelsPairingAccount[] {
   const accounts = props.channels.pairingSnapshot?.accounts ?? [];
+  const allowed = props.ownerChannelKeys;
+  if (!allowed) {
+    return accounts;
+  }
+  const keys = new Set(allowed);
+  return accounts.filter((account) => keys.has(account.channel));
+}
+
+function renderFilters(props: ChannelsProps) {
+  const accounts = ownerAccounts(props);
   const channels = Array.from(
     new Map(accounts.map((account) => [account.channel, account.channelLabel])).entries(),
   ).toSorted((left, right) => left[1].localeCompare(right[1]));
@@ -136,14 +146,18 @@ function renderRequest(request: ChannelsPairingRequest, props: ChannelsProps) {
 
 export function renderChannelPairingQueue(props: ChannelsProps) {
   const snapshot = props.canManagePairing ? props.channels.pairingSnapshot : null;
-  const accounts = snapshot?.accounts ?? [];
+  const allowed = props.ownerChannelKeys ? new Set(props.ownerChannelKeys) : null;
+  const accounts = ownerAccounts(props);
   const requests = (snapshot?.requests ?? []).filter(
     (request) =>
+      (!allowed || allowed.has(request.channel)) &&
       (!props.pairingChannelFilter || request.channel === props.pairingChannelFilter) &&
       (!props.pairingAccountFilter || request.accountId === props.pairingAccountFilter),
   );
   const hasFilter = Boolean(props.pairingChannelFilter || props.pairingAccountFilter);
-  const count = snapshot?.requests.length ?? 0;
+  const count = (snapshot?.requests ?? []).filter(
+    (request) => !allowed || allowed.has(request.channel),
+  ).length;
   return html`
     <div id="channels-pairing-requests">
       ${renderSettingsSection(

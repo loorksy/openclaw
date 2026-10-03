@@ -18,6 +18,7 @@ type MarketSnapshot = {
   recommendations: { id: string; direction: string; status: string }[];
   responsibilities: { id: string; title: string; status: string }[];
   dataStatus?: string;
+  dataError?: string | null;
   assessment?: string | null;
 };
 
@@ -29,8 +30,20 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private error: string | null = null;
   @state() private loading = false;
 
+  private loadGeneration = 0;
+  private seenPhase: string | undefined;
+
   private readonly subscriptions = new SubscriptionsController(this).watchStore(
     () => this.context?.gateway,
+    () => {
+      const phase = this.context?.gateway?.snapshot.phase;
+      if (phase === "connected" && this.seenPhase !== "connected") {
+        this.seenPhase = phase;
+        void this.load();
+      } else if (phase) {
+        this.seenPhase = phase;
+      }
+    },
   );
 
   override connectedCallback() {
@@ -39,6 +52,7 @@ class MarketPage extends OpenClawLightDomElement {
   }
 
   private async load() {
+    const generation = ++this.loadGeneration;
     const gateway = this.context?.gateway;
     const client = gateway?.snapshot.client;
     if (!client || gateway.snapshot.phase !== "connected") {
@@ -54,12 +68,21 @@ class MarketPage extends OpenClawLightDomElement {
     this.loading = true;
     this.error = null;
     try {
-      this.snapshot = await client.request<MarketSnapshot>("lonora.market.snapshot", {});
+      const snapshot = await client.request<MarketSnapshot>("lonora.market.snapshot", {});
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      this.snapshot = snapshot;
     } catch (error) {
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.snapshot = null;
       this.error = error instanceof Error ? error.message : t("lonora.market.unavailable");
     } finally {
-      this.loading = false;
+      if (generation === this.loadGeneration) {
+        this.loading = false;
+      }
     }
   }
 
@@ -71,7 +94,12 @@ class MarketPage extends OpenClawLightDomElement {
           <h1>${titleForRoute("market")}</h1>
           <p>${t("lonora.market.lead")}</p>
         </header>
-        <button class="btn" type="button" ?disabled=${this.loading} @click=${() => void this.load()}>
+        <button
+          class="btn"
+          type="button"
+          ?disabled=${this.loading}
+          @click=${() => void this.load()}
+        >
           ${t("common.refresh")}
         </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : nothing}
@@ -84,9 +112,14 @@ class MarketPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.market.session")}</dt>
                   <dd>${snapshot.clock.session}</dd>
                   <dt>${t("lonora.market.state")}</dt>
-                  <dd>${snapshot.clock.isOpen ? t("lonora.market.open") : t("lonora.market.closed")}</dd>
+                  <dd>
+                    ${snapshot.clock.isOpen ? t("lonora.market.open") : t("lonora.market.closed")}
+                  </dd>
+                  <dt>${t("lonora.market.data")}</dt>
+                  <dd>${marketDataLabel(snapshot)}</dd>
                   <dt>${t("lonora.market.price")}</dt>
-                  <dd>${snapshot.lastPrice ?? t("lonora.market.noPrice")}</dd>
+                  <dd>${marketPriceLabel(snapshot)}</dd>
+                  ${snapshot.dataError ? html`<p role="status">${snapshot.dataError}</p>` : nothing}
                   <dt>${t("lonora.market.assessment")}</dt>
                   <dd>${snapshot.assessment ?? snapshot.message}</dd>
                 </dl>
@@ -115,6 +148,34 @@ class MarketPage extends OpenClawLightDomElement {
         }
       </section>
     `;
+  }
+}
+
+function marketPriceLabel(snapshot: MarketSnapshot): string {
+  if (
+    snapshot.dataStatus === "unavailable" ||
+    snapshot.dataStatus === "failed" ||
+    snapshot.lastPrice == null
+  ) {
+    return t("lonora.market.noPrice");
+  }
+  return String(snapshot.lastPrice);
+}
+
+function marketDataLabel(snapshot: MarketSnapshot): string {
+  switch (snapshot.dataStatus) {
+    case "ok":
+      return t("lonora.market.dataLive");
+    case "stale":
+      return t("lonora.market.dataStale");
+    case "unavailable":
+      return t("lonora.market.dataUnavailable");
+    case "failed":
+      return t("lonora.market.dataFailed");
+    case "closed":
+      return t("lonora.market.dataClosed");
+    default:
+      return snapshot.clock.isOpen ? t("lonora.market.dataLive") : t("lonora.market.dataClosed");
   }
 }
 

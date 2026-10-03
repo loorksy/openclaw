@@ -1,5 +1,5 @@
-import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import type { OwnerLanguage, OwnerRecord } from "./domain/owner.js";
 import type { RecommendationPlan } from "./domain/recommendations.js";
 import type { UsageEvent, UsageFeature } from "./domain/usage.js";
@@ -149,6 +149,42 @@ export class LonoraStore {
     };
   }
 
+  /**
+   * Replace the automatic local placeholder when a migration names the real owner.
+   * A different owner that already has recommendations or memories is refused.
+   */
+  adoptOwner(owner: OwnerRecord): OwnerRecord {
+    const existing = this.getOwner();
+    if (!existing || existing.id === owner.id) {
+      return this.insertOwner(owner);
+    }
+    const placeholder =
+      existing.id === "owner" &&
+      existing.source === "local-gateway" &&
+      this.listRecommendations().length === 0 &&
+      this.memoryCount() === 0;
+    if (!placeholder) {
+      throw new Error("Lonora already has an owner. A second account cannot be created.");
+    }
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare("DELETE FROM owner WHERE id = ?").run(existing.id);
+      const saved = this.insertOwner(owner);
+      this.db.exec("COMMIT");
+      return saved;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  memoryCount(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS count FROM memories").get() as {
+      count: number;
+    };
+    return Number(row.count);
+  }
+
   insertOwner(owner: OwnerRecord): OwnerRecord {
     const existing = this.getOwner();
     if (existing && existing.id !== owner.id) {
@@ -196,7 +232,9 @@ export class LonoraStore {
   }
 
   listRecommendations(): RecommendationPlan[] {
-    const rows = this.db.prepare("SELECT payload FROM recommendations ORDER BY updated_at DESC").all() as {
+    const rows = this.db
+      .prepare("SELECT payload FROM recommendations ORDER BY updated_at DESC")
+      .all() as {
       payload: string;
     }[];
     return rows.map((row) => JSON.parse(row.payload) as RecommendationPlan);
@@ -490,9 +528,7 @@ export class LonoraStore {
     lastError: string | null;
   }[] {
     const rows = this.db
-      .prepare(
-        "SELECT provider, default_model, status, last_error FROM provider_secrets",
-      )
+      .prepare("SELECT provider, default_model, status, last_error FROM provider_secrets")
       .all() as {
       provider: string;
       default_model: string | null;

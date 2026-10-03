@@ -89,20 +89,17 @@ export function blockReasonForTool(input: {
   toolName: string;
   sessionKey?: string;
   jobId?: string;
+  /** Ignored. Model parameters are not owner authority. */
   ownerConfirmed?: boolean;
 }): string | null {
   if (isCodingTool(input.toolName)) {
     return "Lonora does not expose coding, shell, or filesystem tools.";
   }
-  if (input.toolName !== "lonora_execute_trade") {
-    return null;
+  if (input.toolName === "lonora_execute_trade") {
+    return "Trade execution is owner-confirmed only. Model tools, monitoring, schedules, and sub-agents cannot place trades.";
   }
-  const autonomous =
-    Boolean(input.jobId) ||
-    (input.sessionKey?.includes(":cron:") ?? false) ||
-    (input.sessionKey?.includes(":subagent:") ?? false);
-  if (autonomous || input.ownerConfirmed !== true) {
-    return "Trade execution is owner-confirmed only. Monitoring, schedules, and sub-agents cannot place trades.";
+  if (input.toolName === "lonora_notify") {
+    return "Notifications are recorded by the market monitor. A model call cannot confirm them.";
   }
   return null;
 }

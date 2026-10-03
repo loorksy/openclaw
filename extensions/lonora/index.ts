@@ -1,14 +1,14 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { Type } from "typebox";
 import {
   ErrorCodes,
   errorShape,
   type GatewayRequestHandlerOptions,
 } from "openclaw/plugin-sdk/gateway-runtime";
 import { definePluginEntry, type OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
-import type { Candle } from "./src/domain/candles.js";
+import { Type } from "typebox";
 import type { SpecialistId } from "./src/domain/agents.js";
+import type { Candle } from "./src/domain/candles.js";
 import { LONORA_SYSTEM_CONTEXT, LONORA_TOOL_ALLOW, lonoraToolDecision } from "./src/policy.js";
 import { LonoraService } from "./src/service.js";
 import { LonoraStore, type MemoryKind } from "./src/store.js";
@@ -29,11 +29,11 @@ export default definePluginEntry({
   configSchema: {
     parse(value: unknown) {
       const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-        const dailyBudgetUsd =
-          typeof record.dailyBudgetUsd === "number" && record.dailyBudgetUsd >= 0
-            ? record.dailyBudgetUsd
-            : null;
-        return {
+      const dailyBudgetUsd =
+        typeof record.dailyBudgetUsd === "number" && record.dailyBudgetUsd >= 0
+          ? record.dailyBudgetUsd
+          : null;
+      return {
         monitorIntervalMs:
           typeof record.monitorIntervalMs === "number" && record.monitorIntervalMs >= 15_000
             ? record.monitorIntervalMs
@@ -45,11 +45,10 @@ export default definePluginEntry({
   register(api: OpenClawPluginApi) {
     let service: LonoraService | null = null;
     let timer: ReturnType<typeof setInterval> | undefined;
-    const config = (
+    const config =
       api.pluginConfig && typeof api.pluginConfig === "object"
         ? (api.pluginConfig as { monitorIntervalMs?: number; dailyBudgetUsd?: number | null })
-        : {}
-    );
+        : {};
     const intervalMs =
       typeof config.monitorIntervalMs === "number" && config.monitorIntervalMs >= 15_000
         ? config.monitorIntervalMs
@@ -72,7 +71,13 @@ export default definePluginEntry({
           typeof config.dailyBudgetUsd === "number" ? config.dailyBudgetUsd : null;
         service.ownerStatus();
         const tick = () => {
-          void service?.monitorOnce();
+          const current = service;
+          if (!current) {
+            return;
+          }
+          void current.monitorOnce().catch((error: unknown) => {
+            current.recordMonitorFailure(error);
+          });
         };
         tick();
         timer = setInterval(tick, intervalMs);
@@ -89,13 +94,11 @@ export default definePluginEntry({
     });
 
     api.on("before_tool_call", (event, ctx) => {
-      const params = event.params as { ownerConfirmed?: boolean } | undefined;
       const context = ctx as { sessionKey?: string; jobId?: string };
       return lonoraToolDecision({
         toolName: event.toolName,
         sessionKey: context.sessionKey,
         jobId: context.jobId,
-        ownerConfirmed: params?.ownerConfirmed === true,
       });
     });
 
@@ -109,7 +112,12 @@ export default definePluginEntry({
         return;
       }
       const usage = (event as { usage?: { input?: number; output?: number } }).usage;
-      const context = ctx as { provider?: string; model?: string; sessionKey?: string; jobId?: string };
+      const context = ctx as {
+        provider?: string;
+        model?: string;
+        sessionKey?: string;
+        jobId?: string;
+      };
       if (!usage) {
         return;
       }
@@ -198,14 +206,11 @@ export default definePluginEntry({
       "List or grade XAUUSD recommendations. Grading uses closed candles only.",
       Type.Object({
         action: Type.Union([Type.Literal("list"), Type.Literal("grade")]),
-        candles: Type.Optional(Type.Array(Type.Unknown())),
       }),
-      (params) => {
+      async (params) => {
         const current = requireService();
         if (params.action === "grade") {
-          return current.gradeRecommendations(
-            (params.candles as Candle[] | undefined) ?? [],
-          );
+          return current.gradeLiveRecommendations();
         }
         return current.store.listRecommendations();
       },
@@ -257,7 +262,11 @@ export default definePluginEntry({
           });
         }
         const status =
-          params.action === "pause" ? "paused" : params.action === "resume" ? "running" : "cancelled";
+          params.action === "pause"
+            ? "paused"
+            : params.action === "resume"
+              ? "running"
+              : "cancelled";
         return current.setResponsibilityStatus(String(params.id), status);
       },
     );
@@ -282,24 +291,13 @@ export default definePluginEntry({
       "lonora_notify",
       "Record an owner notification intent. Delivery stays deduped.",
       Type.Object({ key: Text, message: Text }),
-      (params) => {
-        const current = requireService();
-        current.store.saveNotice({
-          key: String(params.key),
-          status: "pending",
-          attempts: 1,
-          lastAttemptAt: Date.now(),
-          cooldownUntil: Date.now(),
-          payload: String(params.message),
-        });
-        return { ok: true, status: "pending" };
-      },
+      (params) => requireService().notifyOwner(String(params.key), String(params.message)),
     );
     tool(
       "lonora_execute_trade",
-      "Owner-confirmed trade boundary. Autonomous calls are refused and no broker is contacted.",
-      Type.Object({ ownerConfirmed: Type.Optional(Type.Boolean()) }),
-      () => requireService().confirmTrade({ caller: "model", ownerConfirmed: true }),
+      "Owner-confirmed trade boundary. Model calls are refused and no broker is contacted.",
+      Type.Object({}),
+      () => requireService().confirmTrade({ caller: "model" }),
     );
 
     const handle =
@@ -313,9 +311,13 @@ export default definePluginEntry({
         }
       };
 
-    api.registerGatewayMethod("lonora.owner.status", handle(() => requireService().ownerStatus()), {
-      scope: "operator.read",
-    });
+    api.registerGatewayMethod(
+      "lonora.owner.status",
+      handle(() => requireService().ownerStatus()),
+      {
+        scope: "operator.read",
+      },
+    );
     api.registerGatewayMethod(
       "lonora.market.snapshot",
       handle(() => requireService().marketSnapshot()),
@@ -331,12 +333,20 @@ export default definePluginEntry({
       handle(() => requireService().store.listResponsibilities()),
       { scope: "operator.read" },
     );
-    api.registerGatewayMethod("lonora.agents.list", handle(() => requireService().agentsView()), {
-      scope: "operator.read",
-    });
-    api.registerGatewayMethod("lonora.usage.summary", handle(() => requireService().usageSummary()), {
-      scope: "operator.read",
-    });
+    api.registerGatewayMethod(
+      "lonora.agents.list",
+      handle(() => requireService().agentsView()),
+      {
+        scope: "operator.read",
+      },
+    );
+    api.registerGatewayMethod(
+      "lonora.usage.summary",
+      handle(() => requireService().usageSummary()),
+      {
+        scope: "operator.read",
+      },
+    );
     api.registerGatewayMethod(
       "lonora.providers.status",
       handle(() => requireService().providerSettings()),
