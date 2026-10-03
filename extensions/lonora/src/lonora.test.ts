@@ -570,6 +570,12 @@ describe("responsibilities, memory, usage", () => {
       );
     }
     expect(service.refreshScenarioMemory().winRate).toBeNull();
+    expect(service.recommendationRecord()).toMatchObject({
+      sample: 4,
+      winRate: null,
+      invented: false,
+    });
+    expect(service.recommendationRecord().text).toMatch(/too small/);
     expect(store.searchMemory("realized", "scenario")).toEqual([]);
     service.saveRecommendation(
       plan({ id: "rec-4", outcome: "loss", status: "sl_hit", effectiveEntry: 2300 }),

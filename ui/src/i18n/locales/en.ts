@@ -4864,6 +4864,8 @@ export const en: TranslationMap & {
       activation: "Activation",
       prepare: "Prepare from closed candles",
       preparing: "Preparing…",
+      record: "Realized record",
+      recordEmpty: "No realized gold record yet.",
     },
     tasks: {
       lead: "Responsibilities keep running after you close the browser.",

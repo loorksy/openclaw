@@ -512,10 +512,15 @@ export class LonoraService {
   }
 
   refreshScenarioMemory() {
-    const owner = this.store.ensureLocalOwner();
-    const summary = summarizeScenario(this.store.listRecommendations(), owner.language);
+    const summary = this.recommendationRecord();
     this.store.replaceMemory("scenario", "XAUUSD", summary.writable ? summary.text : null);
     return summary;
+  }
+
+  recommendationRecord() {
+    const owner = this.store.ensureLocalOwner();
+    const summary = summarizeScenario(this.store.listRecommendations(), owner.language);
+    return { ...summary, invented: false as const };
   }
 
   async similarHistory(now = Date.now()) {

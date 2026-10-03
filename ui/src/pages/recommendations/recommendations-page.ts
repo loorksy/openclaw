@@ -27,6 +27,7 @@ class RecommendationsPage extends OpenClawLightDomElement {
   private context!: ApplicationContext;
 
   @state() private plans: Recommendation[] = [];
+  @state() private recordText: string | null = null;
   @state() private error: string | null = null;
   @state() private notice: string | null = null;
   @state() private loading = false;
@@ -98,11 +99,13 @@ class RecommendationsPage extends OpenClawLightDomElement {
     if (!client || gateway.snapshot.phase !== "connected") {
       this.error = t("lonora.recommendations.disconnected");
       this.plans = [];
+      this.recordText = null;
       return;
     }
     if (isGatewayMethodAdvertised(gateway.snapshot, "lonora.recommendations.list") === false) {
       this.error = t("lonora.recommendations.unavailable");
       this.plans = [];
+      this.recordText = null;
       return;
     }
     this.loading = true;
@@ -113,15 +116,50 @@ class RecommendationsPage extends OpenClawLightDomElement {
         return;
       }
       this.plans = Array.isArray(result) ? result : [];
+      await this.loadRecord(generation);
     } catch (error) {
       if (generation !== this.loadGeneration) {
         return;
       }
       this.plans = [];
+      this.recordText = null;
       this.error = error instanceof Error ? error.message : t("lonora.recommendations.unavailable");
     } finally {
       if (generation === this.loadGeneration) {
         this.loading = false;
+      }
+    }
+  }
+
+  private async loadRecord(generation: number) {
+    const gateway = this.context?.gateway;
+    const client = gateway?.snapshot.client;
+    if (
+      !client ||
+      isGatewayMethodAdvertised(gateway.snapshot, "lonora.recommendations.record") === false
+    ) {
+      this.recordText = null;
+      return;
+    }
+    try {
+      const result = await client.request<{
+        text?: string;
+        sample?: number;
+        winRate?: number | null;
+        invented?: boolean;
+      }>("lonora.recommendations.record", {});
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      const sample = result.sample ?? 0;
+      if (result.invented || (result.winRate != null && sample < 5)) {
+        this.recordText = null;
+        return;
+      }
+      this.recordText = result.text ?? null;
+    } catch {
+      if (generation === this.loadGeneration) {
+        this.recordText = null;
       }
     }
   }
@@ -151,6 +189,10 @@ class RecommendationsPage extends OpenClawLightDomElement {
         </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : nothing}
         ${this.notice ? html`<p role="status">${this.notice}</p>` : nothing}
+        <h2>${t("lonora.recommendations.record")}</h2>
+        <p role="status" style="white-space: pre-wrap;">
+          ${this.recordText ?? t("lonora.recommendations.recordEmpty")}
+        </p>
         ${
           !this.error && this.plans.length === 0
             ? html`<p>${t("lonora.recommendations.empty")}</p>`

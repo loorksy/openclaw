@@ -438,6 +438,11 @@ export default definePluginEntry({
       { scope: "operator.read" },
     );
     api.registerGatewayMethod(
+      "lonora.recommendations.record",
+      handle(() => requireService().recommendationRecord()),
+      { scope: "operator.read" },
+    );
+    api.registerGatewayMethod(
       "lonora.recommendations.prepare",
       handle(() => requireService().prepareRecommendation()),
       { scope: "operator.write" },
