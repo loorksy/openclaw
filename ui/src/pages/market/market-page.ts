@@ -13,8 +13,49 @@ import { candleChart, type ChartCandle, type ChartMark } from "./chart.ts";
 
 registerLonoraEnglish();
 
+type MarketChrome = {
+  title: string;
+  lead: string;
+  refresh: string;
+  symbol: string;
+  session: string;
+  state: string;
+  open: string;
+  closed: string;
+  data: string;
+  price: string;
+  noPrice: string;
+  assessment: string;
+  calendar: string;
+  calendarUnknown: string;
+  memory: string;
+  memoryUnknown: string;
+  headlines: string;
+  headlinesUnknown: string;
+  history: string;
+  historyCompare: string;
+  historyComparing: string;
+  historyEmpty: string;
+  chart: string;
+  chartEmpty: string;
+  chartUnavailable: string;
+  break: string;
+  timeframe: string;
+  priorDay: string;
+  range: string;
+  sweep: string;
+  zones: string;
+  pattern: string;
+  candle: string;
+  recommendations: string;
+  recommendationsEmpty: string;
+  responsibilities: string;
+  responsibilitiesEmpty: string;
+};
+
 type MarketSnapshot = {
   symbol: string;
+  chrome?: MarketChrome;
   message: string;
   lastPrice: number | null;
   stale: boolean;
@@ -369,13 +410,19 @@ class MarketPage extends OpenClawLightDomElement {
     }
   }
 
+  private chromeText(key: keyof MarketChrome, fallback: string): string {
+    const value = this.snapshot?.chrome?.[key];
+    return value && value.trim().length > 0 ? value : fallback;
+  }
+
   override render() {
     const snapshot = this.snapshot;
+    const label = (key: keyof MarketChrome, fallback: string) => this.chromeText(key, fallback);
     return html`
       <section class="content" style="padding: 24px; max-width: 880px;">
         <header>
-          <h1>${titleForRoute("market")}</h1>
-          <p>${t("lonora.market.lead")}</p>
+          <h1>${label("title", titleForRoute("market"))}</h1>
+          <p>${label("lead", t("lonora.market.lead"))}</p>
         </header>
         <button
           class="btn"
@@ -383,65 +430,83 @@ class MarketPage extends OpenClawLightDomElement {
           ?disabled=${this.loading}
           @click=${() => void this.load()}
         >
-          ${t("common.refresh")}
+          ${label("refresh", t("common.refresh"))}
         </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : nothing}
         ${
           snapshot
             ? html`
                 <dl>
-                  <dt>${t("lonora.market.symbol")}</dt>
+                  <dt>${label("symbol", t("lonora.market.symbol"))}</dt>
                   <dd>${snapshot.symbol}</dd>
-                  <dt>${t("lonora.market.session")}</dt>
+                  <dt>${label("session", t("lonora.market.session"))}</dt>
                   <dd>${snapshot.centers || snapshot.clock.session}</dd>
-                  <dt>${t("lonora.market.state")}</dt>
+                  <dt>${label("state", t("lonora.market.state"))}</dt>
                   <dd>
-                    ${snapshot.clock.isOpen ? t("lonora.market.open") : t("lonora.market.closed")}
+                    ${
+                      snapshot.clock.isOpen
+                        ? label("open", t("lonora.market.open"))
+                        : label("closed", t("lonora.market.closed"))
+                    }
                   </dd>
-                  <dt>${t("lonora.market.data")}</dt>
+                  <dt>${label("data", t("lonora.market.data"))}</dt>
                   <dd>${snapshot.dataStatusLabel || marketDataLabel(snapshot)}</dd>
-                  <dt>${t("lonora.market.price")}</dt>
-                  <dd>${marketPriceLabel(snapshot)}</dd>
+                  <dt>${label("price", t("lonora.market.price"))}</dt>
+                  <dd>
+                    ${marketPriceLabel(snapshot, label("noPrice", t("lonora.market.noPrice")))}
+                  </dd>
                   ${
                     snapshot.dataErrorLabel || snapshot.dataError
                       ? html`<p role="status">${snapshot.dataErrorLabel || snapshot.dataError}</p>`
                       : nothing
                   }
-                  <dt>${t("lonora.market.assessment")}</dt>
-                  <dd>${snapshot.assessment ?? t("lonora.market.chartUnavailable")}</dd>
-                  <dt>${t("lonora.market.calendar")}</dt>
+                  <dt>${label("assessment", t("lonora.market.assessment"))}</dt>
+                  <dd>
+                    ${snapshot.assessment ?? label("chartUnavailable", t("lonora.market.chartUnavailable"))}
+                  </dd>
+                  <dt>${label("calendar", t("lonora.market.calendar"))}</dt>
                   <dd>
                     ${
                       this.calendarText ??
                       snapshot.calendar?.summary ??
-                      t("lonora.market.calendarUnknown")
+                      label("calendarUnknown", t("lonora.market.calendarUnknown"))
                     }
                   </dd>
-                  <dt>${t("lonora.market.memory")}</dt>
-                  <dd>${this.memoryText ?? t("lonora.market.memoryUnknown")}</dd>
-                  <dt>${t("lonora.market.headlines")}</dt>
+                  <dt>${label("memory", t("lonora.market.memory"))}</dt>
+                  <dd>
+                    ${this.memoryText ?? label("memoryUnknown", t("lonora.market.memoryUnknown"))}
+                  </dd>
+                  <dt>${label("headlines", t("lonora.market.headlines"))}</dt>
                   <dd>
                     ${
                       this.headlineText ??
                       snapshot.headlines?.summary ??
-                      t("lonora.market.headlinesUnknown")
+                      label("headlinesUnknown", t("lonora.market.headlinesUnknown"))
                     }
                   </dd>
                 </dl>
-                <h2>${t("lonora.market.history")}</h2>
+                <h2>${label("history", t("lonora.market.history"))}</h2>
                 <button
                   class="btn"
                   type="button"
                   ?disabled=${this.comparing}
                   @click=${() => void this.compareHistory()}
                 >
-                  ${this.comparing ? t("lonora.market.historyComparing") : t("lonora.market.historyCompare")}
+                  ${
+                    this.comparing
+                      ? label("historyComparing", t("lonora.market.historyComparing"))
+                      : label("historyCompare", t("lonora.market.historyCompare"))
+                  }
                 </button>
-                <p role="status">${this.historyText ?? t("lonora.market.historyEmpty")}</p>
-                <h2>${t("lonora.market.chart")}</h2>
+                <p role="status">
+                  ${this.historyText ?? label("historyEmpty", t("lonora.market.historyEmpty"))}
+                </p>
+                <h2>${label("chart", t("lonora.market.chart"))}</h2>
                 ${renderChart(
                   this.candles,
                   this.chartError,
+                  label("chart", t("lonora.market.chart")),
+                  label("chartEmpty", t("lonora.market.chartEmpty")),
                   chartMarks({
                     priorDay: this.priorDay,
                     buySide: this.buySide,
@@ -451,13 +516,13 @@ class MarketPage extends OpenClawLightDomElement {
                     structureBreak: this.structureBreak,
                   }),
                 )}
-                <h2>${t("lonora.market.break")}</h2>
+                <h2>${label("break", t("lonora.market.break"))}</h2>
                 <p>${readSentence(this.breakSummary, this.chartError, this.candles.length)}</p>
-                <h2>${t("lonora.market.timeframe")}</h2>
+                <h2>${label("timeframe", t("lonora.market.timeframe"))}</h2>
                 <p>${readSentence(this.timeframeSummary, this.chartError, this.candles.length)}</p>
-                <h2>${t("lonora.market.priorDay")}</h2>
+                <h2>${label("priorDay", t("lonora.market.priorDay"))}</h2>
                 <p>${priorDayText(this.priorDay, this.chartError, this.candles.length)}</p>
-                <h2>${t("lonora.market.range")}</h2>
+                <h2>${label("range", t("lonora.market.range"))}</h2>
                 <p>
                   ${
                     this.rangeSummary != null
@@ -465,7 +530,7 @@ class MarketPage extends OpenClawLightDomElement {
                       : rangeText(this.dealingRange, this.chartError, this.candles.length)
                   }
                 </p>
-                <h2>${t("lonora.market.sweep")}</h2>
+                <h2>${label("sweep", t("lonora.market.sweep"))}</h2>
                 <p>
                   ${
                     this.liquiditySummary != null
@@ -480,7 +545,7 @@ class MarketPage extends OpenClawLightDomElement {
                         <p>${poolText(this.buySide, "lonora.market.poolsBuy")}</p>
                         <p>${poolText(this.sellSide, "lonora.market.poolsSell")}</p>`
                 }
-                <h2>${t("lonora.market.zones")}</h2>
+                <h2>${label("zones", t("lonora.market.zones"))}</h2>
                 <p>
                   ${
                     this.zoneSummary != null
@@ -493,7 +558,7 @@ class MarketPage extends OpenClawLightDomElement {
                         )
                   }
                 </p>
-                <h2>${t("lonora.market.pattern")}</h2>
+                <h2>${label("pattern", t("lonora.market.pattern"))}</h2>
                 <p>
                   ${
                     this.patternSummary != null
@@ -501,7 +566,7 @@ class MarketPage extends OpenClawLightDomElement {
                       : patternText(this.pattern, this.chartError, this.candles.length)
                   }
                 </p>
-                <h2>${t("lonora.market.candle")}</h2>
+                <h2>${label("candle", t("lonora.market.candle"))}</h2>
                 <p>
                   ${
                     this.candleSummary != null
@@ -509,7 +574,7 @@ class MarketPage extends OpenClawLightDomElement {
                       : candleText(this.candleShape, this.chartError, this.candles.length)
                   }
                 </p>
-                <h2>${t("lonora.market.activeRecommendations")}</h2>
+                <h2>${label("recommendations", t("lonora.market.activeRecommendations"))}</h2>
                 ${
                   snapshot.recommendations.length
                     ? html`<ul>
@@ -521,9 +586,11 @@ class MarketPage extends OpenClawLightDomElement {
                             </li>`,
                         )}
                       </ul>`
-                    : html`<p>${t("lonora.market.noRecommendations")}</p>`
+                    : html`<p>
+                        ${label("recommendationsEmpty", t("lonora.market.noRecommendations"))}
+                      </p>`
                 }
-                <h2>${t("lonora.market.responsibilities")}</h2>
+                <h2>${label("responsibilities", t("lonora.market.responsibilities"))}</h2>
                 ${
                   snapshot.responsibilities.length
                     ? html`<ul>
@@ -531,7 +598,9 @@ class MarketPage extends OpenClawLightDomElement {
                           (row) => html`<li>${row.title} · ${row.statusLabel || row.status}</li>`,
                         )}
                       </ul>`
-                    : html`<p>${t("lonora.market.noResponsibilities")}</p>`
+                    : html`<p>
+                        ${label("responsibilitiesEmpty", t("lonora.market.noResponsibilities"))}
+                      </p>`
                 }
               `
             : nothing
@@ -909,16 +978,22 @@ function chartMarks(input: {
   return marks;
 }
 
-function renderChart(candles: ChartCandle[], error: string | null, marks: ChartMark[]) {
+function renderChart(
+  candles: ChartCandle[],
+  error: string | null,
+  chartLabel: string,
+  emptyLabel: string,
+  marks: ChartMark[],
+) {
   const chart = candleChart(candles, marks);
   if (!chart) {
-    return html`<p>${error ?? t("lonora.market.chartEmpty")}</p>`;
+    return html`<p>${error ?? emptyLabel}</p>`;
   }
   return svg`<svg
     viewBox="0 0 ${chart.width} ${chart.height}"
     width="100%"
     role="img"
-    aria-label=${t("lonora.market.chart")}
+    aria-label=${chartLabel}
   >
     ${chart.bands.map(
       (band) => svg`
@@ -963,13 +1038,13 @@ function renderChart(candles: ChartCandle[], error: string | null, marks: ChartM
   </svg>`;
 }
 
-function marketPriceLabel(snapshot: MarketSnapshot): string {
+function marketPriceLabel(snapshot: MarketSnapshot, missing: string): string {
   if (
     snapshot.dataStatus === "unavailable" ||
     snapshot.dataStatus === "failed" ||
     snapshot.lastPrice == null
   ) {
-    return t("lonora.market.noPrice");
+    return missing;
   }
   return String(snapshot.lastPrice);
 }

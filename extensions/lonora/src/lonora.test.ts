@@ -1982,6 +1982,9 @@ describe("market data", () => {
     expect(winter.dataStatus).toBe("unknown");
     expect(winter.dataStatusLabel).toBe(copy("en", "data.unknown"));
     expect(winter.dataStatusLabel).not.toBe("Live");
+    expect(winter.chrome.symbol).toBe("Symbol");
+    expect(winter.chrome.title).toBe("Market");
+    expect(winter.chrome.symbol).not.toBe(copy("ar", "chrome.symbol"));
     service.readCandles = async () => ({
       ok: false,
       candles: [],
@@ -1995,6 +1998,9 @@ describe("market data", () => {
     expect(missing.dataError).toBe("Market data is unavailable.");
     expect(missing.dataErrorLabel).toBe(copy("en", "data.errorUnavailable"));
     store.setLanguage("ar");
+    expect(service.marketSnapshot(openAt).chrome.symbol).toBe("الرمز");
+    expect(service.marketSnapshot(openAt).chrome.title).toBe("السوق");
+    expect(service.marketSnapshot(openAt).chrome.symbol).not.toBe("Symbol");
     expect(service.marketSnapshot(openAt).dataErrorLabel).toBe(copy("ar", "data.errorUnavailable"));
     expect(service.marketSnapshot(openAt).dataStatusLabel).toBe(copy("ar", "data.unavailable"));
     const weekend = service.marketSnapshot(Date.UTC(2026, 0, 17, 12, 0));

@@ -28,7 +28,13 @@ import {
 import { describeCandleShape, latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { latestOwnerText } from "./domain/conversation.js";
-import { copy, describeNotice, marketReasonCopy, type CopyKey } from "./domain/copy.js";
+import {
+  copy,
+  describeNotice,
+  marketChrome,
+  marketReasonCopy,
+  type CopyKey,
+} from "./domain/copy.js";
 import { tradableRetestBand } from "./domain/fill.js";
 import {
   describeHeadlines,
@@ -140,6 +146,7 @@ export class LonoraService {
     const observation = this.store.getObservation<Observation>();
     return {
       symbol: "XAUUSD",
+      chrome: marketChrome(owner.language),
       clock,
       centers: this.sessionSentence(now),
       message: marketReasonCopy(owner.language, clock.reason),
