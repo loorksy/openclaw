@@ -512,6 +512,36 @@ describe("responsibilities, memory, usage", () => {
     const research = service.delegate({ agent: "research-agent" });
     expect(research.ok).toBe(true);
     expect(research.summary).toMatch(/Win rate 60%/);
+    const fromModelCandles = service.delegate({
+      agent: "research-agent",
+      candles: risingCandles(40),
+    });
+    expect(fromModelCandles.summary).toBe(research.summary);
+    expect(fromModelCandles.summary).not.toMatch(/bias/i);
+    store.close();
+  });
+
+  it("compares closed candles and withholds a rate from a short sample", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new (class extends LonoraService {
+      override readCandles() {
+        return Promise.resolve({
+          ok: true,
+          candles: risingCandles(40),
+          price: 2339,
+          stale: false,
+          invented: false as const,
+        });
+      }
+    })(store);
+    const report = await service.compareSimilarHistory();
+    expect(report.invented).toBe(false);
+    expect(report.brokerCalled).toBe(false);
+    expect(report.winRate).toBeNull();
+    expect(report.text).not.toMatch(/%/);
+    expect(service.agentsView().find((agent) => agent.agent === "research-agent")?.lastResult).toBe(
+      report.text,
+    );
     store.close();
   });
 

@@ -481,6 +481,65 @@ export class LonoraService {
     return { ok: true as const, indexed: added, invented: false as const, ...report };
   }
 
+  async compareSimilarHistory(input?: { enforceDelegation?: boolean; now?: number }) {
+    if (input?.enforceDelegation) {
+      try {
+        assertDelegation({
+          depth: 1,
+          childCount: this.store.countAgentRunsSince(Date.now() - DELEGATION_WINDOW_MS),
+          requested: 1,
+          timeoutMs: 20_000,
+          tokenBudget: 4_000,
+        });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Delegation refused.";
+        this.store.recordAgentRun({ agent: "research-agent", status: "failed", summary: text });
+        return {
+          ok: false as const,
+          indexed: 0,
+          matches: 0,
+          resolved: 0,
+          winRate: null,
+          invented: false as const,
+          brokerCalled: false as const,
+          text,
+          failure: "delegation_limit" as const,
+        };
+      }
+    }
+    const language = this.store.ensureLocalOwner().language;
+    const history = await this.similarHistory(input?.now ?? Date.now());
+    const scenario = this.refreshScenarioMemory();
+    const safe =
+      history.winRate != null && history.resolved < 8
+        ? {
+            matches: history.matches,
+            resolved: history.resolved,
+            winRate: null,
+            text: `${copy(language, "cases.counts")} ${history.matches}/${history.resolved}.`,
+          }
+        : history;
+    const text = [scenario.writable ? scenario.text : "", safe.text]
+      .filter((part) => part.trim().length > 0)
+      .join(" ");
+    const summary = text || copy(language, "cases.insufficient");
+    this.store.recordAgentRun({
+      agent: "research-agent",
+      status: history.ok ? "ok" : "failed",
+      summary,
+    });
+    return {
+      ok: history.ok,
+      indexed: history.indexed,
+      matches: safe.matches,
+      resolved: safe.resolved,
+      winRate: safe.winRate,
+      invented: false as const,
+      brokerCalled: false as const,
+      text: summary,
+    };
+  }
+
   notifyOwner(_key: string, _message: string): never {
     assertPermission({ permission: "NOTIFY", caller: "model", ownerConfirmed: false });
     throw new Error("Model notifications require an owner path outside the model tool.");
@@ -711,7 +770,7 @@ function purposeFor(agent: SpecialistId): string {
     case "risk-reviewer":
       return "Grade reward against stop distance.";
     case "research-agent":
-      return "Compare a supplied historical candle sample.";
+      return "Compare earlier closed gold moments. A small sample does not become a rate.";
     case "memory-curator":
       return "Compact a lesson so later responsibilities stay small.";
     case "system-guardian":

@@ -35,6 +35,8 @@ class MarketPage extends OpenClawLightDomElement {
     null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
+  @state() private historyText: string | null = null;
+  @state() private comparing = false;
   @state() private loading = false;
 
   private loadGeneration = 0;
@@ -94,6 +96,44 @@ class MarketPage extends OpenClawLightDomElement {
       if (generation === this.loadGeneration) {
         this.loading = false;
       }
+    }
+  }
+
+  private async compareHistory() {
+    const target = lonoraRequestTarget(this.context, "lonora.research.similar");
+    if (!target.ok) {
+      this.historyText = null;
+      this.error =
+        target.reason === "disconnected"
+          ? t("lonora.market.disconnected")
+          : t("lonora.market.historyUnavailable");
+      return;
+    }
+    this.comparing = true;
+    this.error = null;
+    try {
+      const result = await target.client.request<{
+        ok: boolean;
+        text?: string;
+        matches?: number;
+        resolved?: number;
+        winRate?: number | null;
+        invented?: boolean;
+        brokerCalled?: boolean;
+      }>("lonora.research.similar", {});
+      const resolved = result.resolved ?? 0;
+      const rateTooSmall = result.winRate != null && resolved < 8;
+      if (result.invented || result.brokerCalled || rateTooSmall) {
+        this.historyText = null;
+        this.error = t("lonora.market.historyUnavailable");
+        return;
+      }
+      this.historyText = result.text ?? t("lonora.market.historyUnavailable");
+    } catch (error) {
+      this.historyText = null;
+      this.error = error instanceof Error ? error.message : t("lonora.market.historyUnavailable");
+    } finally {
+      this.comparing = false;
     }
   }
 
@@ -169,6 +209,16 @@ class MarketPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.market.calendar")}</dt>
                   <dd>${snapshot.calendar?.summary ?? t("lonora.market.calendarUnknown")}</dd>
                 </dl>
+                <h2>${t("lonora.market.history")}</h2>
+                <button
+                  class="btn"
+                  type="button"
+                  ?disabled=${this.comparing}
+                  @click=${() => void this.compareHistory()}
+                >
+                  ${this.comparing ? t("lonora.market.historyComparing") : t("lonora.market.historyCompare")}
+                </button>
+                <p role="status">${this.historyText ?? t("lonora.market.historyEmpty")}</p>
                 <h2>${t("lonora.market.chart")}</h2>
                 ${renderChart(this.candles, this.chartError)}
                 <h2>${t("lonora.market.sweep")}</h2>

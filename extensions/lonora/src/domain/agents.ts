@@ -240,23 +240,22 @@ export function runSpecialist(
       };
     }
     case "research-agent": {
-      const scenario = input.note?.trim() ?? "";
-      const bars = input.candles?.length ?? 0;
-      if (!scenario && bars < 10) {
+      const language = input.language ?? "en";
+      const report = input.note?.trim() ?? "";
+      if (!report) {
         return {
           agent: id,
           ok: false,
-          summary: "Research needs a realized gold record or a closed-candle sample.",
-          data: { bars },
+          summary: copy(language, "cases.insufficient"),
+          data: {},
           failure: "insufficient_history",
         };
       }
-      const bias = bars >= 10 ? biasFromCandles(input.candles!) : null;
       return {
         agent: id,
         ok: true,
-        summary: [scenario, bias ? `Closed-candle bias ${bias}.` : ""].filter(Boolean).join(" "),
-        data: { scenario: scenario || null, bars, bias: bias ?? "unknown" },
+        summary: report,
+        data: { report },
       };
     }
     case "memory-curator":

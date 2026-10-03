@@ -355,12 +355,7 @@ export default definePluginEntry({
           });
         }
         if (agent === "research-agent") {
-          const history = await current.similarHistory();
-          return current.delegate({
-            agent,
-            candles: params.candles as Candle[] | undefined,
-            note: history.text,
-          });
+          return current.compareSimilarHistory({ enforceDelegation: true });
         }
         return current.delegate({
           agent,
@@ -418,6 +413,11 @@ export default definePluginEntry({
     api.registerGatewayMethod(
       "lonora.recommendations.prepare",
       handle(() => requireService().prepareRecommendation()),
+      { scope: "operator.write" },
+    );
+    api.registerGatewayMethod(
+      "lonora.research.similar",
+      handle(() => requireService().compareSimilarHistory()),
       { scope: "operator.write" },
     );
     api.registerGatewayMethod(
