@@ -90,6 +90,61 @@ describe("historical cases", () => {
     }));
     const report = findSimilarCases(candles, cases, "ar");
     expect(report.winRate).toBe(1);
-    expect(report.text).toContain("%");
+    expect(report.text).toContain("شراء 8, 100%.");
+    expect(report.text).not.toContain("بيع");
+  });
+
+  it("does not average a buy and a sell from the same moment", () => {
+    const candles = Array.from({ length: 40 }, (_, index) => candle(index, 2300));
+    const current = fingerprintAt(candles)!;
+    const cases: HistoricalCase[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      const caseTime = candles[0]!.time - (index + 1) * 3_600_000;
+      cases.push(
+        {
+          caseTime,
+          direction: "buy",
+          fingerprint: current,
+          outcome: {
+            resolution: "target_first",
+            bars: 3,
+            maxFavourableAtr: 2,
+            maxAdverseAtr: 0.1,
+            netR: 2,
+          },
+        },
+        {
+          caseTime,
+          direction: "sell",
+          fingerprint: current,
+          outcome: {
+            resolution: "stop_first",
+            bars: 3,
+            maxFavourableAtr: 0.2,
+            maxAdverseAtr: 1,
+            netR: -1,
+          },
+        },
+      );
+    }
+    const report = findSimilarCases(candles, cases, "en");
+    expect(report.matches).toBe(16);
+    expect(report.resolved).toBe(16);
+    expect(report.winRate).toBeNull();
+    expect(report.text).toContain("Buy 8, 100%.");
+    expect(report.text).toContain("Sell 8, 0%.");
+    expect(report.text).not.toMatch(/50%/);
+    const thin = findSimilarCases(
+      candles,
+      [
+        ...cases.filter((item) => item.direction === "buy"),
+        ...cases.filter((item) => item.direction === "sell").slice(0, 3),
+      ],
+      "en",
+    );
+    expect(thin.winRate).toBeNull();
+    expect(thin.text).toContain("Buy 8, 100%.");
+    expect(thin.text).toContain("Sell 3/3.");
+    expect(thin.text.split("Sell")[1] ?? "").not.toMatch(/%/);
   });
 });

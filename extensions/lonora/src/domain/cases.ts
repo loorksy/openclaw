@@ -237,11 +237,13 @@ export function findSimilarCases(
       fingerprintSimilarity(query, item.fingerprint) >= MIN_CASE_SIMILARITY,
   );
   const resolved = matches.filter((item) => item.outcome.resolution !== "unresolved");
-  const wins = resolved.filter((item) => item.outcome.resolution === "target_first").length;
   if (matches.length === 0) {
     return { matches: 0, resolved: 0, winRate: null, text: copy(language, "cases.none") };
   }
-  if (resolved.length < MIN_CASE_SAMPLE) {
+  const buy = directionSample(matches, "buy");
+  const sell = directionSample(matches, "sell");
+  const rated = [buy, sell].filter((side) => side.resolved >= MIN_CASE_SAMPLE);
+  if (rated.length === 0) {
     return {
       matches: matches.length,
       resolved: resolved.length,
@@ -249,13 +251,34 @@ export function findSimilarCases(
       text: `${copy(language, "cases.counts")} ${matches.length}/${resolved.length}.`,
     };
   }
-  const winRate = wins / resolved.length;
+  const single = rated.length === 1 && buy.matches + sell.matches === rated[0]!.matches;
   return {
     matches: matches.length,
     resolved: resolved.length,
-    winRate,
-    text: `${copy(language, "cases.rate")} ${resolved.length}, ${Math.round(winRate * 100)}%.`,
+    winRate: single ? rated[0]!.wins / rated[0]!.resolved : null,
+    text: `${copy(language, "cases.rate")}: ${[buy, sell]
+      .filter((side) => side.matches > 0)
+      .map((side) => directionSentence(language, side))
+      .join(" ")}`,
   };
+}
+
+function directionSample(matches: readonly HistoricalCase[], direction: "buy" | "sell") {
+  const rows = matches.filter((item) => item.direction === direction);
+  const resolved = rows.filter((item) => item.outcome.resolution !== "unresolved");
+  const wins = resolved.filter((item) => item.outcome.resolution === "target_first").length;
+  return { direction, matches: rows.length, resolved: resolved.length, wins };
+}
+
+function directionSentence(
+  language: OwnerLanguage,
+  side: { direction: "buy" | "sell"; matches: number; resolved: number; wins: number },
+): string {
+  const label = copy(language, side.direction === "buy" ? "label.buy" : "label.sell");
+  if (side.resolved >= MIN_CASE_SAMPLE) {
+    return `${label} ${side.resolved}, ${Math.round((side.wins / side.resolved) * 100)}%.`;
+  }
+  return `${label} ${side.matches}/${side.resolved}.`;
 }
 
 function atrOf(candles: readonly Candle[], period = 14): number {
