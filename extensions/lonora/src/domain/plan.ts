@@ -61,6 +61,7 @@ export function prepareGoldPlan(
   language: OwnerLanguage = "en",
   now = Date.now(),
   spread?: number | null,
+  closed?: { nextOpenAt: number } | null,
 ): PreparedPlan | RejectedPlan {
   const visible = candles.filter((candle) => isSaneCandle(candle));
   const atr = calculateAtr(visible);
@@ -148,7 +149,43 @@ export function prepareGoldPlan(
     createdAt: now,
     rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}. ${pathLine}${rangeLine}${copy(language, "plan.targets")} ${targets.join(", ")}. ${quality}`,
   };
-  return { ok: true, plan, invented: false, brokerCalled: false };
+  return {
+    ok: true,
+    plan: closed ? holdClosedMarketPlan(plan, language, closed.nextOpenAt) : plan,
+    invented: false,
+    brokerCalled: false,
+  };
+}
+
+const nextOpenFormatter = new Map<OwnerLanguage, Intl.DateTimeFormat>();
+
+function formatNextOpen(nextOpenAt: number, language: OwnerLanguage): string {
+  let formatter = nextOpenFormatter.get(language);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(language === "ar" ? "ar" : "en", {
+      timeZone: "America/New_York",
+      weekday: "long",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    nextOpenFormatter.set(language, formatter);
+  }
+  return formatter.format(nextOpenAt);
+}
+
+/** A closed book cannot fill at market. The plan waits for the next open. */
+export function holdClosedMarketPlan(
+  plan: RecommendationPlan,
+  language: OwnerLanguage,
+  nextOpenAt: number,
+): RecommendationPlan {
+  const notice = `${copy(language, "plan.closedScenario")} ${formatNextOpen(nextOpenAt, language)} ${copy(language, "plan.closedClock")}`;
+  return {
+    ...plan,
+    entryType: plan.entryType === "market" ? "limit_touch" : plan.entryType,
+    triggeredAt: undefined,
+    rationale: `${plan.rationale ?? ""} ${notice}`.trim(),
+  };
 }
 
 function selectZone(

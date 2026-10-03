@@ -460,7 +460,14 @@ export class LonoraService {
         brokerCalled: false as const,
       };
     }
-    const prepared = prepareGoldPlan(read.candles, language, now);
+    const clock = readMarketClock(now);
+    const prepared = prepareGoldPlan(
+      read.candles,
+      language,
+      now,
+      undefined,
+      clock.isOpen ? null : { nextOpenAt: clock.nextOpenAt },
+    );
     if (!prepared.ok) {
       return prepared;
     }

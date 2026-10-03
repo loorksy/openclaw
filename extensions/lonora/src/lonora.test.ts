@@ -1222,7 +1222,25 @@ describe("manual execution", () => {
       return;
     }
     expect(prepared.plan.stopLoss).toBeLessThan(2296);
+    expect(prepared.plan.rationale).not.toContain("Gold is closed.");
     expect(store.listRecommendations()).toHaveLength(1);
+    const saturday = Date.UTC(2026, 0, 17, 12, 0);
+    const closed = await service.prepareRecommendation(saturday);
+    expect(closed.ok).toBe(true);
+    expect(closed.brokerCalled).toBe(false);
+    if (!closed.ok) {
+      return;
+    }
+    expect(closed.plan.entryType).not.toBe("market");
+    expect(closed.plan.rationale).toContain(copy("en", "plan.closedScenario"));
+    expect(closed.plan.rationale).toContain(copy("en", "plan.closedClock"));
+    expect(evaluateRecommendation(closed.plan, candles).triggered).toBe(false);
+    store.setLanguage("ar");
+    const arabic = await service.prepareRecommendation(saturday);
+    expect(arabic.ok).toBe(true);
+    if (arabic.ok) {
+      expect(arabic.plan.rationale).toContain(copy("ar", "plan.closedScenario"));
+    }
     store.close();
   });
 

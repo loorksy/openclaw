@@ -67,6 +67,8 @@ const COPY = {
     "plan.pathNeutral":
       "The idea waits for price to return to the zone. The path is not a trade the other way.",
     "plan.rangeWait": "That location does not favor an immediate entry. The direction stays.",
+    "plan.closedScenario": "Gold is closed. This plan waits for the next open at",
+    "plan.closedClock": "New York.",
     "range.premium": "Price is in the premium of",
     "range.discount": "Price is in the discount of",
     "range.mid": "Price is mid-range in",
@@ -199,6 +201,8 @@ const COPY = {
     "plan.pathUnlikely": "السعر يبتعد عن المنطقة المعلقة. هذا ليس صفقة في الاتجاه المعاكس.",
     "plan.pathNeutral": "الفكرة تنتظر عودة السعر إلى المنطقة. المسار ليس صفقة في الاتجاه المعاكس.",
     "plan.rangeWait": "هذا الموقع لا يفضّل دخولاً فورياً. الاتجاه يبقى.",
+    "plan.closedScenario": "الذهب مغلق. هذه الخطة تنتظر الفتح التالي عند",
+    "plan.closedClock": "بتوقيت نيويورك.",
     "range.premium": "السعر في منطقة العلاوة ضمن",
     "range.discount": "السعر في منطقة الخصم ضمن",
     "range.mid": "السعر في منتصف النطاق",

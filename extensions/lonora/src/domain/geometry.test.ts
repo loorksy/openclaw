@@ -3,13 +3,15 @@ import type { Candle } from "./candles.js";
 import { computeNetR } from "./geometry.js";
 import { applyStopDistanceFloor, placeProtectedStop, stopBuffer } from "./geometry.js";
 import {
+  holdClosedMarketPlan,
+  prepareGoldPlan,
+  selectStructuralTargets,
   analyzePathToEntry,
   describePlanQuality,
   higherTimeframeBias,
-  prepareGoldPlan,
-  selectStructuralTargets,
   timeframeAlignment,
 } from "./plan.js";
+import { evaluateRecommendation } from "./recommendations.js";
 
 function bar(index: number, open: number, high: number, low: number, close: number): Candle {
   return { time: 1_700_000_000_000 + index * 3_600_000, open, high, low, close };
@@ -167,6 +169,35 @@ describe("prepare gold plan", () => {
     expect(timeframeAlignment("sell", "bullish")).toBe("conflict");
     expect(higherTimeframeBias(rising.slice(0, 22))).toBe("unknown");
     expect(timeframeAlignment("buy", "unknown")).toBe("unknown");
+  });
+
+  it("holds a closed-market entry until the next open", () => {
+    const nextOpenAt = Date.UTC(2026, 0, 18, 23, 0);
+    const held = holdClosedMarketPlan(
+      {
+        id: "closed",
+        symbol: "XAUUSD",
+        direction: "buy",
+        entryType: "market",
+        entry: 2300,
+        stopLoss: 2280,
+        targets: [2360],
+        status: "pending_entry",
+        outcome: "pending",
+        createdCandleTime: 1,
+        createdAt: Date.UTC(2026, 0, 17, 12, 0),
+        rationale: "Live plan.",
+      },
+      "en",
+      nextOpenAt,
+    );
+    expect(held.entryType).toBe("limit_touch");
+    expect(held.triggeredAt).toBeUndefined();
+    expect(held.rationale).toContain("Gold is closed. This plan waits for the next open at");
+    expect(held.rationale).toContain("New York.");
+    expect(evaluateRecommendation(held, []).triggered).toBe(false);
+    expect(evaluateRecommendation(held, []).status).toBe("pending_entry");
+    expect(holdClosedMarketPlan(held, "ar", nextOpenAt).rationale).toContain("الذهب مغلق");
   });
 
   it("does not invent a plan when the candle sample is too short", () => {
