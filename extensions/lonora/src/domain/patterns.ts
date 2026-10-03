@@ -38,6 +38,16 @@ export interface SwingRangePattern {
   breakLevel: number | null;
   completionRatio: number;
   inventedTarget: false;
+  /** A double top or double bottom when the swings qualify. Never a projected target. */
+  named: NamedExtreme | null;
+}
+
+export interface NamedExtreme {
+  kind: "double_top" | "double_bottom";
+  stage: PatternStage;
+  neckline: number;
+  extreme: number;
+  inventedTarget: false;
 }
 
 const UNCLASSIFIED: SwingRangePattern = {
@@ -48,9 +58,18 @@ const UNCLASSIFIED: SwingRangePattern = {
   breakLevel: null,
   completionRatio: 0,
   inventedTarget: false,
+  named: null,
 };
 
+const MAX_EXTREME_GAP_ATR = 0.4;
+const MIN_BAR_SEPARATION = 8;
+const MIN_HEIGHT_ATR = 0.5;
+
 export function classifySwingRange(candles: Candle[]): SwingRangePattern {
+  return { ...classifyRange(candles), named: classifyDoubleExtreme(candles) };
+}
+
+function classifyRange(candles: Candle[]): Omit<SwingRangePattern, "named"> {
   if (candles.length < 15) {
     return UNCLASSIFIED;
   }
@@ -136,7 +155,13 @@ export function classifySwingRange(candles: Candle[]): SwingRangePattern {
 export function describePattern(pattern: SwingRangePattern, language: OwnerLanguage): string {
   const bounds =
     pattern.low != null && pattern.high != null ? ` ${pattern.low}–${pattern.high}` : "";
-  switch (pattern.stage) {
+  const name = namedLabel(pattern.named, language);
+  const body = rangeSentence(pattern.stage, bounds, language);
+  return name ? `${body} ${name}` : body;
+}
+
+function rangeSentence(stage: PatternStage, bounds: string, language: OwnerLanguage): string {
+  switch (stage) {
     case "unclassified":
       return copy(language, "pattern.unclassified");
     case "starting":
@@ -152,6 +177,103 @@ export function describePattern(pattern: SwingRangePattern, language: OwnerLangu
     case "failed":
       return copy(language, "pattern.failed");
   }
+}
+
+function namedLabel(named: NamedExtreme | null, language: OwnerLanguage): string {
+  if (!named || named.inventedTarget !== false) {
+    return "";
+  }
+  return copy(language, named.kind === "double_top" ? "pattern.doubleTop" : "pattern.doubleBottom");
+}
+
+function classifyDoubleExtreme(candles: Candle[]): NamedExtreme | null {
+  if (candles.length < 15) {
+    return null;
+  }
+  const atr = calculateAtr(candles);
+  if (atr == null || !(atr > 0)) {
+    return null;
+  }
+  const swings = detectSwings(candles)
+    .map((swing) => ({
+      ...swing,
+      index: candles.findIndex((candle) => candle.time === swing.time),
+    }))
+    .filter((swing) => swing.index >= 0);
+  const top = scanDouble(candles, swings, atr, "top");
+  const bottom = scanDouble(candles, swings, atr, "bottom");
+  if (top && bottom) {
+    return top.secondIndex >= bottom.secondIndex ? top.named : bottom.named;
+  }
+  return top?.named ?? bottom?.named ?? null;
+}
+
+function scanDouble(
+  candles: readonly Candle[],
+  swings: readonly (Swing & { index: number })[],
+  atr: number,
+  variant: "top" | "bottom",
+): { named: NamedExtreme; secondIndex: number } | null {
+  const extremeKind = variant === "top" ? "high" : "low";
+  for (let end = swings.length - 1; end >= 2; end -= 1) {
+    const second = swings[end]!;
+    const middle = swings[end - 1]!;
+    const first = swings[end - 2]!;
+    if (first.type !== extremeKind || second.type !== extremeKind || middle.type === extremeKind) {
+      continue;
+    }
+    if (second.index - first.index < MIN_BAR_SEPARATION) {
+      continue;
+    }
+    if (Math.abs(second.price - first.price) > MAX_EXTREME_GAP_ATR * atr) {
+      continue;
+    }
+    const extreme =
+      variant === "top" ? Math.max(first.price, second.price) : Math.min(first.price, second.price);
+    const neckline = middle.price;
+    if (Math.abs(extreme - neckline) <= atr * MIN_HEIGHT_ATR) {
+      continue;
+    }
+    const breakDirection = variant === "top" ? "down" : "up";
+    const completion = firstCloseBeyond(candles, second.index, neckline, breakDirection, atr);
+    const invalidation = firstCloseBeyond(
+      candles,
+      second.index,
+      extreme,
+      variant === "top" ? "up" : "down",
+      atr,
+    );
+    const invalidatedFirst =
+      invalidation.breakIndex != null &&
+      (completion.breakIndex == null || invalidation.breakIndex < completion.breakIndex);
+    const completed = completion.breakIndex != null && !invalidatedFirst;
+    let stage: PatternStage;
+    if (invalidatedFirst) {
+      stage = "failed";
+    } else if (completed && completion.breakIndex != null) {
+      const confirmed = candles
+        .slice(completion.breakIndex + 1)
+        .some((candle) => Math.abs(candle.close - neckline) > atr * CONFIRMATION_ATR);
+      stage = confirmed ? "confirmed" : "completed_unconfirmed";
+    } else {
+      const lastClose = candles.at(-1)?.close;
+      const distanceAtr = lastClose == null ? 2 : Math.abs(lastClose - neckline) / atr;
+      const proximity = Math.max(0, Math.min(1, 1 - distanceAtr / 2));
+      const ratio = Math.max(0.45, proximity * 0.9);
+      stage = ratio < 0.75 ? "forming" : "near_completion";
+    }
+    return {
+      secondIndex: second.index,
+      named: {
+        kind: variant === "top" ? "double_top" : "double_bottom",
+        stage,
+        neckline,
+        extreme,
+        inventedTarget: false,
+      },
+    };
+  }
+  return null;
 }
 
 function shapeProgress(swings: Swing[], high: number, low: number, atr: number): number {

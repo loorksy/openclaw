@@ -333,6 +333,7 @@ type SwingRangeView = {
   high: number | null;
   low: number | null;
   inventedTarget: false;
+  named?: { kind: string; inventedTarget: false } | null;
 };
 
 function patternText(pattern: SwingRangeView | null, error: string | null, candleCount: number) {
@@ -343,10 +344,22 @@ function patternText(pattern: SwingRangeView | null, error: string | null, candl
     return t("lonora.market.patternUnknown");
   }
   const stage = patternStageLabel(pattern.stage);
-  if (pattern.low == null || pattern.high == null || pattern.stage === "unclassified") {
-    return stage;
+  const name = pattern.named?.inventedTarget === false ? namedPatternLabel(pattern.named.kind) : "";
+  const bounds =
+    pattern.low == null || pattern.high == null || pattern.stage === "unclassified"
+      ? stage
+      : `${stage} ${pattern.low}–${pattern.high}`;
+  return name ? `${bounds} · ${name}` : bounds;
+}
+
+function namedPatternLabel(kind: string) {
+  if (kind === "double_top") {
+    return t("lonora.market.patternDoubleTop");
   }
-  return `${stage} ${pattern.low}–${pattern.high}`;
+  if (kind === "double_bottom") {
+    return t("lonora.market.patternDoubleBottom");
+  }
+  return "";
 }
 
 function patternStageLabel(stage: string) {

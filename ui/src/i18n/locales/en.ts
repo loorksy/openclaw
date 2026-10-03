@@ -4814,6 +4814,8 @@ export const en: TranslationMap & {
       patternCompleted: "A close moved beyond the swing range. Confirmation is still open.",
       patternConfirmed: "A later close confirmed the move beyond the swing range.",
       patternFailed: "The swing range failed.",
+      patternDoubleTop: "Double top",
+      patternDoubleBottom: "Double bottom",
       activeRecommendations: "Active recommendations",
       noRecommendations: "No active recommendations.",
       responsibilities: "Market responsibilities",

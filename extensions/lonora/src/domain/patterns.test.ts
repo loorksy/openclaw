@@ -97,4 +97,57 @@ describe("swing range stage", () => {
     expect(pattern.inventedTarget).toBe(false);
     expect(pattern.completionRatio).toBeLessThan(0.35);
   });
+
+  it("names a double top only after a close through the neckline", () => {
+    const candles = doubleTop();
+    const forming = classifySwingRange(candles);
+    expect(forming.named).toMatchObject({
+      kind: "double_top",
+      stage: "forming",
+      neckline: 100,
+      inventedTarget: false,
+    });
+    expect(forming.named).not.toHaveProperty("target");
+    expect(describePattern(forming, "en")).toContain("Double top");
+    expect(describePattern(forming, "ar")).toContain("قمة مزدوجة");
+    expect(describePattern(forming, "en").toLowerCase()).not.toMatch(/projected|measured/);
+
+    const wicked = classifySwingRange([...candles, bar(candles.length, 104.4, 90, 103)]);
+    expect(wicked.named?.stage).not.toBe("completed_unconfirmed");
+    expect(wicked.named?.stage).not.toBe("confirmed");
+
+    const completed = classifySwingRange([...candles, bar(candles.length, 104.4, 96, 98)]);
+    expect(completed.named?.stage).toBe("completed_unconfirmed");
+    expect(completed.named?.inventedTarget).toBe(false);
+
+    const confirmed = classifySwingRange([
+      ...candles,
+      bar(candles.length, 104.4, 96, 98),
+      bar(candles.length + 1, 104.4, 94, 96),
+    ]);
+    expect(confirmed.named?.stage).toBe("confirmed");
+
+    const failed = classifySwingRange([...candles, bar(candles.length, 114, 103, 113)]);
+    expect(failed.named?.stage).toBe("failed");
+    expect(failed.named?.inventedTarget).toBe(false);
+  });
 });
+
+function doubleTop(): Candle[] {
+  const candles = Array.from({ length: 28 }, (_, index) => bar(index, 104.5, 103.5, 104));
+  const high = (index: number, price: number) => {
+    candles[index] = bar(index, price, 103.5, 105);
+    candles[index - 2] = bar(index - 2, 106, 103.5, 104);
+    candles[index - 1] = bar(index - 1, 106, 103.5, 104);
+    candles[index + 1] = bar(index + 1, 106, 103.5, 104);
+    candles[index + 2] = bar(index + 2, 106, 103.5, 104);
+  };
+  high(8, 110);
+  high(20, 110.2);
+  candles[14] = bar(14, 104.2, 100, 102);
+  candles[12] = bar(12, 105, 103, 104);
+  candles[13] = bar(13, 105, 103, 104);
+  candles[15] = bar(15, 105, 103, 104);
+  candles[16] = bar(16, 105, 103, 104);
+  return candles;
+}

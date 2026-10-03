@@ -75,6 +75,8 @@ const COPY = {
     "pattern.completed": "A close moved beyond the swing range. Confirmation is still open.",
     "pattern.confirmed": "A later close confirmed the move beyond the swing range.",
     "pattern.failed": "The swing range failed.",
+    "pattern.doubleTop": "Double top",
+    "pattern.doubleBottom": "Double bottom",
   },
   ar: {
     "session.open": "سوق الذهب مفتوح.",
@@ -145,6 +147,8 @@ const COPY = {
     "pattern.completed": "إغلاق تجاوز نطاق التأرجح. التأكيد ما زال مفتوحاً.",
     "pattern.confirmed": "إغلاق لاحق أكّد الحركة خارج نطاق التأرجح.",
     "pattern.failed": "فشل نطاق التأرجح.",
+    "pattern.doubleTop": "قمة مزدوجة",
+    "pattern.doubleBottom": "قاع مزدوج",
   },
 } as const;
 
