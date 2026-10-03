@@ -917,6 +917,9 @@ describe("responsibilities, memory, usage", () => {
     });
     expect(named.tasksView()[0]?.status).toBe("running");
     expect(named.tasksView()[0]?.statusLabel).toBe("Running");
+    expect(named.tasksView()[0]?.lastLabel).toBe("Not checked yet");
+    expect(named.tasksView()[0]?.nextLabel).toBe("Waiting for a market event");
+    expect(named.tasksView()[0]?.nextLabel).not.toContain("T");
     named.store.setLanguage("ar");
     named.setResponsibilityStatus(watch.id, "paused");
     const paused = named.tasksView().find((row) => row.id === watch.id);
@@ -925,6 +928,36 @@ describe("responsibilities, memory, usage", () => {
     expect(paused?.statusLabel).not.toBe("Paused");
     named.setResponsibilityStatus(watch.id, "running");
     expect(named.marketSnapshot().responsibilities[0]?.statusLabel).toBe("تعمل");
+    const at = Date.UTC(2026, 0, 14, 15, 0);
+    named.store.saveResponsibility({
+      id: watch.id,
+      title: watch.title,
+      instruction: watch.instruction,
+      status: "running",
+      lastCheckAt: at - 12 * 60_000,
+      nextCheckAt: at + 2 * 60 * 60_000,
+      lastEvent: null,
+    });
+    const timed = named.tasksView(at).find((row) => row.id === watch.id);
+    expect(timed?.lastLabel).toBe("منذ 12 د");
+    expect(timed?.nextLabel).toBe("بعد 2 س");
+    expect(timed?.nextLabel).not.toContain("2026");
+    named.store.setLanguage("en");
+    const englishTimed = named.tasksView(at).find((row) => row.id === watch.id);
+    expect(englishTimed?.lastLabel).toBe("12 minutes ago");
+    expect(englishTimed?.nextLabel).toBe("in 2 hours");
+    expect(named.marketSnapshot(at).responsibilities[0]?.nextLabel).toBe("in 2 hours");
+    named.store.saveResponsibility({
+      id: watch.id,
+      title: watch.title,
+      instruction: watch.instruction,
+      status: "running",
+      lastCheckAt: at - 5_000,
+      nextCheckAt: at - 5_000,
+      lastEvent: null,
+    });
+    expect(named.tasksView(at)[0]?.lastLabel).toBe("Just now");
+    expect(named.tasksView(at)[0]?.nextLabel).toBe("Due now");
     named.store.close();
     const empty = new LonoraService(LonoraStore.open(":memory:"));
     const emptyAt = Date.UTC(2026, 0, 14, 15, 0);

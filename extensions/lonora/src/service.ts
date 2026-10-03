@@ -150,7 +150,7 @@ export class LonoraService {
         .listRecommendations()
         .filter((plan) => plan.outcome === "pending")
         .map((plan) => ({ ...plan, ...recommendationLabels(plan, owner.language) })),
-      responsibilities: this.tasksView().filter((row) => row.status === "running"),
+      responsibilities: this.tasksView(now).filter((row) => row.status === "running"),
     };
   }
 
@@ -972,11 +972,13 @@ export class LonoraService {
     return lines.join(" ").slice(0, 700);
   }
 
-  tasksView() {
+  tasksView(now = Date.now()) {
     const language = this.store.ensureLocalOwner().language;
     return this.store.listResponsibilities().map((row) => ({
       ...row,
       statusLabel: copy(language, taskStatusKey(row.status)),
+      lastLabel: taskClockLabel(language, row.lastCheckAt, now, "last"),
+      nextLabel: taskClockLabel(language, row.nextCheckAt, now, "next"),
     }));
   }
 
@@ -1294,6 +1296,32 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
   }
   const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
   return ruleText ? `${ruleText} ${bandText}` : bandText;
+}
+
+function taskClockLabel(
+  language: OwnerLanguage,
+  at: number | null,
+  now: number,
+  kind: "last" | "next",
+): string {
+  if (at == null) {
+    return copy(language, kind === "last" ? "task.notChecked" : "task.waitingEvent");
+  }
+  const delta = kind === "next" ? at - now : now - at;
+  if (delta < 60_000) {
+    return copy(language, kind === "next" ? "task.due" : "task.justNow");
+  }
+  const minutes = Math.floor(delta / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const key =
+    hours >= 1
+      ? kind === "next"
+        ? "task.inHours"
+        : "task.hoursAgo"
+      : kind === "next"
+        ? "task.inMinutes"
+        : "task.minutesAgo";
+  return copy(language, key).replaceAll("{count}", String(hours >= 1 ? hours : minutes));
 }
 
 function taskStatusKey(
