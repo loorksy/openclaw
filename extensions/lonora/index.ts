@@ -311,7 +311,7 @@ export default definePluginEntry({
       async (params) => {
         const current = requireService();
         if (params.action === "list") {
-          return current.store.listResponsibilities();
+          return current.tasksView();
         }
         if (params.action === "create") {
           const instruction = String(params.instruction ?? "");
@@ -320,7 +320,6 @@ export default definePluginEntry({
           if (!cron) {
             return current.upsertResponsibility({ title, instruction });
           }
-          const language = current.ownerStatus().language;
           let scheduled = false;
           try {
             const job = await api.session.workflow.scheduleSessionTurn({
@@ -337,14 +336,7 @@ export default definePluginEntry({
           } catch {
             scheduled = false;
           }
-          return current.upsertResponsibility({
-            title,
-            instruction,
-            status: scheduled ? "scheduled" : "running",
-            lastEvent: scheduled
-              ? `${copy(language, "tasks.scheduled")} ${cron.expr} ${cron.tz}.`
-              : copy(language, "tasks.scheduleRejected"),
-          });
+          return current.recordBriefingSchedule({ title, instruction, scheduled });
         }
         const status =
           params.action === "pause"

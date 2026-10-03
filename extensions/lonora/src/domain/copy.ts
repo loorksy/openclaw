@@ -41,6 +41,7 @@ const COPY = {
     "tasks.scheduled": "Scheduled",
     "tasks.scheduleRejected":
       "The scheduler did not accept this briefing. The monitor will still check it.",
+    "tasks.weekdayBriefing": "Weekday briefing at 08:00 New York.",
     "trade.blocked": "Lonora will not place that trade. Only you can confirm an order.",
     "recommendations.unreadable":
       "The stored activation rule could not be read, so this plan will not fill.",
@@ -294,6 +295,7 @@ const COPY = {
     "tasks.matched": "تطابق",
     "tasks.scheduled": "مجدول",
     "tasks.scheduleRejected": "المجدول لم يقبل الإحاطة. المراقبة ستستمر في فحصها.",
+    "tasks.weekdayBriefing": "إحاطة أيام الأسبوع عند 08:00 بتوقيت نيويورك.",
     "trade.blocked": "لونورا لن تنفّذ هذه الصفقة. التأكيد اليدوي لك وحدك.",
     "recommendations.unreadable": "تعذر قراءة شرط التفعيل المخزّن، لذلك لن تُملأ هذه الخطة.",
     "calendar.empty": "لا أحداث عالية أو متوسطة ذات صلة بالذهب في هذه النافذة.",

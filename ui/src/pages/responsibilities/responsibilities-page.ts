@@ -19,6 +19,7 @@ type Responsibility = {
   statusLabel?: string;
   lastLabel?: string;
   nextLabel?: string;
+  eventLabel?: string | null;
   lastCheckAt: number | null;
   nextCheckAt: number | null;
   lastEvent: string | null;
@@ -136,7 +137,10 @@ class ResponsibilitiesPage extends OpenClawLightDomElement {
                         ${t("lonora.tasks.nextCheck")}
                         ${row.nextLabel || nextLabel(row.nextCheckAt)}
                       </p>
-                      <p>${t("lonora.tasks.lastEvent")} ${row.lastEvent ?? t("common.na")}</p>
+                      <p>
+                        ${t("lonora.tasks.lastEvent")}
+                        ${row.eventLabel || row.lastEvent || t("common.na")}
+                      </p>
                       ${
                         row.status === "cancelled"
                           ? nothing

@@ -63,7 +63,12 @@ import {
   type RecommendationPlan,
   type RecommendationStatus,
 } from "./domain/recommendations.js";
-import { checkResponsibility, responsibilityEventText } from "./domain/responsibilities.js";
+import {
+  checkResponsibility,
+  ownerEventLabel,
+  responsibilityEventText,
+  scheduledBriefingSentence,
+} from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
 import {
   describeStructureBreak,
@@ -999,7 +1004,24 @@ export class LonoraService {
       statusLabel: copy(language, taskStatusKey(row.status)),
       lastLabel: taskClockLabel(language, row.lastCheckAt, now, "last"),
       nextLabel: taskClockLabel(language, row.nextCheckAt, now, "next"),
+      eventLabel: ownerEventLabel(language, row.lastEvent),
     }));
+  }
+
+  recordBriefingSchedule(input: {
+    title: string;
+    instruction: string;
+    scheduled: boolean;
+  }): ResponsibilityRow {
+    const language = this.store.ensureLocalOwner().language;
+    return this.upsertResponsibility({
+      title: input.title,
+      instruction: input.instruction,
+      status: input.scheduled ? "scheduled" : "running",
+      lastEvent: input.scheduled
+        ? scheduledBriefingSentence(language)
+        : copy(language, "tasks.scheduleRejected"),
+    });
   }
 
   upsertResponsibility(input: {

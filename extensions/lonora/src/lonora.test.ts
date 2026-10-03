@@ -1033,6 +1033,37 @@ describe("responsibilities, memory, usage", () => {
       tz: "America/New_York",
     });
     expect(cronForResponsibility("Watch structure")).toBeNull();
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const scheduled = service.recordBriefingSchedule({
+      title: "Morning briefing",
+      instruction: "Every morning prepare a gold briefing",
+      scheduled: true,
+    });
+    expect(scheduled.status).toBe("scheduled");
+    expect(scheduled.lastEvent).toBe(copy("en", "tasks.weekdayBriefing"));
+    expect(scheduled.lastEvent).not.toContain("0 8");
+    expect(service.tasksView().find((row) => row.id === scheduled.id)?.eventLabel).toBe(
+      copy("en", "tasks.weekdayBriefing"),
+    );
+    store.saveResponsibility({
+      ...scheduled,
+      lastEvent: "Scheduled 0 8 * * 1-5 America/New_York.",
+    });
+    expect(store.listResponsibilities()[0]?.lastEvent).toContain("0 8 * * 1-5");
+    expect(service.tasksView()[0]?.eventLabel).toBe(copy("en", "tasks.weekdayBriefing"));
+    expect(service.tasksView()[0]?.eventLabel).not.toContain("*");
+    store.setLanguage("ar");
+    expect(service.tasksView()[0]?.eventLabel).toBe(copy("ar", "tasks.weekdayBriefing"));
+    expect(service.tasksView()[0]?.lastEvent).toContain("0 8");
+    const missed = service.recordBriefingSchedule({
+      title: "Morning",
+      instruction: "Every morning prepare a gold briefing",
+      scheduled: false,
+    });
+    expect(missed.status).toBe("running");
+    expect(missed.lastEvent).toBe(copy("ar", "tasks.scheduleRejected"));
+    store.close();
   });
 
   it("matches a calendar instruction when a high-impact event is near", () => {

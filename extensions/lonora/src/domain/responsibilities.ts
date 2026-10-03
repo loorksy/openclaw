@@ -21,13 +21,31 @@ const TOPIC_RULES: { pattern: RegExp; reasons: string[] }[] = [
   },
 ];
 
+export const WEEKDAY_BRIEFING_CRON = "0 8 * * 1-5";
+
 export function cronForResponsibility(
   instruction: string,
 ): { expr: string; tz: "America/New_York" } | null {
   if (/every morning|each morning|daily briefing|كل صباح|إحاطة صباحية/i.test(instruction)) {
-    return { expr: "0 8 * * 1-5", tz: "America/New_York" };
+    return { expr: WEEKDAY_BRIEFING_CRON, tz: "America/New_York" };
   }
   return null;
+}
+
+/** Owner sentence for the weekday briefing. The cron expression stays on the scheduler. */
+export function scheduledBriefingSentence(language: OwnerLanguage): string {
+  return copy(language, "tasks.weekdayBriefing");
+}
+
+/** Shows an older stored cron expression as the owner sentence without rewriting the row. */
+export function ownerEventLabel(language: OwnerLanguage, lastEvent: string | null): string | null {
+  if (!lastEvent) {
+    return null;
+  }
+  if (lastEvent.includes(WEEKDAY_BRIEFING_CRON)) {
+    return scheduledBriefingSentence(language);
+  }
+  return lastEvent;
 }
 
 export function checkResponsibility(
