@@ -16,7 +16,7 @@ import {
 } from "./domain/calendar.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
-import { copy, marketReasonCopy } from "./domain/copy.js";
+import { copy, describeNotice, marketReasonCopy } from "./domain/copy.js";
 import { tradableRetestBand } from "./domain/fill.js";
 import {
   describeHeadlines,
@@ -123,7 +123,7 @@ export class LonoraService {
     };
   }
 
-  observe(next: Observation) {
+  observe(next: Observation, now = Date.now()) {
     const previous = this.store.getObservation<Observation>();
     const decision = decideMonitorAction(previous, next);
     if (!next.marketOpen) {
@@ -135,7 +135,9 @@ export class LonoraService {
     return {
       decision,
       message: decision.material
-        ? decision.reasons.join(", ")
+        ? decision.notificationKeys
+            .map((key) => this.noticeText(owner.language, key, now))
+            .join(" ")
         : copy(owner.language, "notify.unchanged"),
     };
   }
@@ -145,11 +147,9 @@ export class LonoraService {
     now = Date.now(),
   ) {
     const owner = this.store.ensureLocalOwner();
-    const text = decision.material
-      ? decision.reasons.join(", ")
-      : copy(owner.language, "notify.unchanged");
     const notices = [];
     for (const key of decision.notificationKeys) {
+      const text = this.noticeText(owner.language, key, now);
       const existing = this.store.getNotice(key);
       if (!shouldNotify(existing, now)) {
         continue;
@@ -337,21 +337,24 @@ export class LonoraService {
         this.gradeRecommendations(candles);
       }
     }
-    const observed = this.observe({
-      candleTime,
-      price,
-      session: clock.session,
-      marketOpen: clock.isOpen,
-      atr,
-      structureEventKey,
-      sweepKey: sweep,
-      macroEventKey,
-      headlineKey,
-      recommendationFingerprint: this.store
-        .listRecommendations()
-        .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
-        .join("|"),
-    });
+    const observed = this.observe(
+      {
+        candleTime,
+        price,
+        session: clock.session,
+        marketOpen: clock.isOpen,
+        atr,
+        structureEventKey,
+        sweepKey: sweep,
+        macroEventKey,
+        headlineKey,
+        recommendationFingerprint: this.store
+          .listRecommendations()
+          .map((plan) => `${plan.id}:${plan.status}:${plan.outcome}`)
+          .join("|"),
+      },
+      now,
+    );
     await this.publishNotices(observed.decision, now);
     if (observed.decision.deepAnalysis && this.withinBudget(now)) {
       const priceDeep = observed.decision.reasons.some((reason) =>
@@ -816,6 +819,24 @@ export class LonoraService {
       return { ok: false as const, code: decision.code, brokerCalled: false };
     }
     return { ok: false as const, code: "not_linked" as const, brokerCalled: false };
+  }
+
+  private noticeText(language: OwnerLanguage, key: string, now: number): string {
+    const lead = describeNotice(language, key);
+    if (key.startsWith("macro_event:") && this.lastCalendar.summary) {
+      return `${lead} ${this.lastCalendar.summary}`;
+    }
+    if (key.startsWith("headline:") && this.lastHeadlines.summary) {
+      return `${lead} ${this.lastHeadlines.summary}`;
+    }
+    if (key.startsWith("session:")) {
+      return `${lead} ${marketReasonCopy(language, readMarketClock(now).reason)}`;
+    }
+    if (key.startsWith("price_move:")) {
+      const price = this.store.getObservation<Observation>()?.price;
+      return price == null ? lead : `${lead} ${price}`;
+    }
+    return lead;
   }
 }
 

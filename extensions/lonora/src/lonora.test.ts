@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { runSpecialist } from "./domain/agents.js";
 import type { Candle } from "./domain/candles.js";
 import { detectSwings, detectTrend } from "./domain/candles.js";
-import { copy } from "./domain/copy.js";
+import { copy, describeNotice } from "./domain/copy.js";
 import { readGoldCandles } from "./domain/market-data.js";
 import { candlesVisibleAt, isGoldMarketOpenAt, readMarketClock } from "./domain/market.js";
 import { decideMonitorAction, nextNotice, shouldNotify } from "./domain/monitor.js";
@@ -1067,8 +1067,8 @@ describe("market data", () => {
     const service = new LonoraService(bound);
     expect(service.bindTelegram("555").ok).toBe(true);
     const sent: string[] = [];
-    service.setNoticeDelivery(async ({ chatId, key }) => {
-      sent.push(`${chatId}:${key}`);
+    service.setNoticeDelivery(async ({ chatId, key, text }) => {
+      sent.push(`${chatId}:${key}:${text}`);
       return true;
     });
     bound.saveObservation(previous);
@@ -1084,8 +1084,15 @@ describe("market data", () => {
       status: "running",
     });
     await service.monitorOnce(closedAt);
-    expect(sent).toEqual(["555:session:newyork:closed"]);
-    expect(bound.getNotice("session:newyork:closed")?.status).toBe("delivered");
+    const sessionNotice = `${copy("en", "notify.sessionClosed")} ${copy("en", "session.closed_saturday")}`;
+    expect(sent).toEqual([`555:session:newyork:closed:${sessionNotice}`]);
+    expect(sessionNotice).not.toMatch(/session_transition|macro_event/);
+    expect(bound.getNotice("session:newyork:closed")).toMatchObject({
+      status: "delivered",
+      payload: sessionNotice,
+    });
+    expect(describeNotice("ar", "macro_event:USD:1:cpi")).toBe(copy("ar", "notify.macro"));
+    expect(describeNotice("ar", "headline:gold")).not.toMatch(/headline_change/);
     const rows = bound.listResponsibilities();
     expect(rows.find((row) => row.status === "scheduled")).toMatchObject({
       lastEvent: "Scheduled 0 8 * * 1-5 America/New_York.",

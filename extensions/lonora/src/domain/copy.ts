@@ -14,6 +14,15 @@ const COPY = {
     "notify.unchanged": "No meaningful gold change.",
     "notify.telegramMissing": "Telegram is not bound, so this notice stayed here.",
     "notify.deliveryFailed": "Telegram did not accept the notice.",
+    "notify.sessionClosed": "The gold session changed while the market is closed.",
+    "notify.macro": "A high-impact gold event is near.",
+    "notify.headline": "Gold headlines changed.",
+    "notify.price": "Gold price moved.",
+    "notify.session": "The gold session changed.",
+    "notify.volatility": "Gold volatility changed.",
+    "notify.structure": "Gold structure changed.",
+    "notify.sweep": "A liquidity sweep printed on a closed candle.",
+    "notify.recommendation": "A gold recommendation changed.",
     "tasks.waitingClosed": "Market is closed. Waiting for the next open.",
     "tasks.waiting": "Still waiting. Nothing in this check matched the instruction.",
     "tasks.matched": "Matched",
@@ -80,6 +89,15 @@ const COPY = {
     "notify.unchanged": "لا تغيير مهم في الذهب.",
     "notify.telegramMissing": "تيليجرام غير مربوط، فبقي التنبيه هنا.",
     "notify.deliveryFailed": "تيليجرام لم يقبل التنبيه.",
+    "notify.sessionClosed": "تغيّرت جلسة الذهب والسوق مغلق.",
+    "notify.macro": "حدث ذهبي عالي التأثير اقترب.",
+    "notify.headline": "تغيرت عناوين الذهب.",
+    "notify.price": "تحرّك سعر الذهب.",
+    "notify.session": "تغيّرت جلسة الذهب.",
+    "notify.volatility": "تغيّر تقلب الذهب.",
+    "notify.structure": "تغيّر هيكل الذهب.",
+    "notify.sweep": "ظهر سحب سيولة على شمعة مغلقة.",
+    "notify.recommendation": "تغيّرت توصية ذهب.",
     "tasks.waitingClosed": "السوق مغلق. الانتظار حتى الفتح التالي.",
     "tasks.waiting": "ما زال الانتظار. هذا الفحص لا يطابق التعليمات.",
     "tasks.matched": "تطابق",
@@ -134,6 +152,35 @@ export type CopyKey = keyof (typeof COPY)["en"];
 
 export function copy(language: OwnerLanguage, key: CopyKey): string {
   return COPY[language][key] ?? COPY.en[key];
+}
+
+/** Owner text for one monitor notice. Internal reason codes stay off the message. */
+export function describeNotice(language: OwnerLanguage, key: string): string {
+  if (key.startsWith("session:")) {
+    return copy(language, "notify.sessionClosed");
+  }
+  if (key.startsWith("macro_event:")) {
+    return copy(language, "notify.macro");
+  }
+  if (key.startsWith("headline:")) {
+    return copy(language, "notify.headline");
+  }
+  switch (key.split(":")[0]) {
+    case "price_move":
+      return copy(language, "notify.price");
+    case "session_transition":
+      return copy(language, "notify.session");
+    case "volatility_change":
+      return copy(language, "notify.volatility");
+    case "structure_change":
+      return copy(language, "notify.structure");
+    case "liquidity_sweep":
+      return copy(language, "notify.sweep");
+    case "recommendation_change":
+      return copy(language, "notify.recommendation");
+    default:
+      return copy(language, "notify.unchanged");
+  }
 }
 
 export function marketReasonCopy(
