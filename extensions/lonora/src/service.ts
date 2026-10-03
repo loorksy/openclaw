@@ -1251,7 +1251,7 @@ export class LonoraService {
     if (!isLonoraProvider(input.provider)) {
       return {
         ok: false as const,
-        error: "Lonora only connects Anthropic, OpenAI, Z.AI, and OpenRouter.",
+        error: copy(this.store.ensureLocalOwner().language, "provider.onlyFour"),
       };
     }
     const probe = await probeProvider({
@@ -1279,14 +1279,19 @@ export class LonoraService {
   providerSettings() {
     const known = new Set(this.store.listProviderStatus().map((row) => row.provider));
     const stored = this.store.listProviderStatus();
+    const language = this.store.ensureLocalOwner().language;
     return (["anthropic", "openai", "zai", "openrouter"] as const).map((provider) => {
       const row = stored.find((item) => item.provider === provider);
+      const status = row?.status ?? "not_connected";
+      const lastError = row?.lastError ?? null;
       return {
         provider,
         connected: row?.connected ?? false,
         defaultModel: row?.defaultModel ?? null,
-        status: row?.status ?? "not_connected",
-        lastError: row?.lastError ?? null,
+        status,
+        statusLabel: copy(language, providerStatusKey(status)),
+        lastError,
+        lastErrorLabel: providerErrorLabel(language, lastError),
         configured: known.has(provider),
       };
     });
@@ -1544,6 +1549,32 @@ function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
   return target == null
     ? `${side} ${plan.entry}, ${levels}`
     : `${side} ${plan.entry}, ${levels}, ${copy(language, "memory.planTarget")} ${target}`;
+}
+
+function providerStatusKey(status: string): CopyKey {
+  if (status === "connected") {
+    return "provider.connected";
+  }
+  if (status === "invalid") {
+    return "provider.invalid";
+  }
+  return "provider.notConnected";
+}
+
+function providerErrorLabel(language: OwnerLanguage, error: string | null): string | null {
+  if (!error) {
+    return null;
+  }
+  if (error === "Missing API key.") {
+    return copy(language, "provider.missingKey");
+  }
+  if (error === "The API key was rejected.") {
+    return copy(language, "provider.rejected");
+  }
+  if (error === "Provider request failed.") {
+    return copy(language, "provider.failed");
+  }
+  return error;
 }
 
 function labelAmounts(

@@ -17,7 +17,9 @@ type ProviderStatus = {
   connected: boolean;
   defaultModel: string | null;
   status: string;
+  statusLabel?: string;
   lastError: string | null;
+  lastErrorLabel?: string | null;
 };
 
 const PROVIDER_LABELS: Record<ProviderStatus["provider"], string> = {
@@ -145,9 +147,13 @@ class AiModelsPage extends OpenClawLightDomElement {
             return html`
               <li>
                 <h2>${label}</h2>
-                <p>${connectionLabel(row)}</p>
+                <p>${row.statusLabel || connectionLabel(row)}</p>
                 <p>${t("lonora.models.defaultModel")} ${row.defaultModel ?? t("common.na")}</p>
-                ${row.lastError ? html`<p role="status">${row.lastError}</p>` : nothing}
+                ${
+                  row.lastErrorLabel || row.lastError
+                    ? html`<p role="status">${row.lastErrorLabel || row.lastError}</p>`
+                    : nothing
+                }
                 <form
                   @submit=${(event: Event) => {
                     event.preventDefault();

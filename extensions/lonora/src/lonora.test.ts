@@ -875,6 +875,54 @@ describe("owner and providers", () => {
     const view = service.providerSettings();
     expect(JSON.stringify(view)).not.toContain(secret);
     expect(view.find((row) => row.provider === "anthropic")?.defaultModel).toBe("claude-test");
+    expect(view.find((row) => row.provider === "anthropic")?.statusLabel).toBe(
+      copy("en", "provider.connected"),
+    );
+    const rejectedKey = await service.connectProvider({
+      provider: "openai",
+      apiKey: secret,
+      fetchImpl: (async () => new Response(`bad key ${secret}`, { status: 401 })) as typeof fetch,
+    });
+    expect(rejectedKey.ok).toBe(false);
+    expect(JSON.stringify(rejectedKey)).not.toContain(secret);
+    const invalid = service.providerSettings().find((row) => row.provider === "openai");
+    expect(invalid?.lastError).toBe("The API key was rejected.");
+    expect(invalid?.lastErrorLabel).toBe(copy("en", "provider.rejected"));
+    expect(invalid?.statusLabel).toBe(copy("en", "provider.invalid"));
+    store.saveProviderSecret({
+      provider: "zai",
+      apiKey: secret,
+      defaultModel: null,
+      status: "invalid",
+      lastError: "parse failed",
+    });
+    expect(service.providerSettings().find((row) => row.provider === "zai")?.lastErrorLabel).toBe(
+      "parse failed",
+    );
+    const blocked = await service.connectProvider({ provider: "nvidia", apiKey: secret });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.error).toBe(copy("en", "provider.onlyFour"));
+    }
+    expect(JSON.stringify(service.providerSettings())).not.toContain(secret);
+    store.setLanguage("ar");
+    const arabic = service.providerSettings();
+    expect(arabic.find((row) => row.provider === "openai")?.lastError).toBe(
+      "The API key was rejected.",
+    );
+    expect(arabic.find((row) => row.provider === "openai")?.lastErrorLabel).toBe(
+      copy("ar", "provider.rejected"),
+    );
+    expect(arabic.find((row) => row.provider === "anthropic")?.statusLabel).toBe(
+      copy("ar", "provider.connected"),
+    );
+    expect(arabic.find((row) => row.provider === "zai")?.lastErrorLabel).toBe("parse failed");
+    const arabicBlocked = await service.connectProvider({ provider: "nvidia", apiKey: secret });
+    expect(arabicBlocked.ok).toBe(false);
+    if (!arabicBlocked.ok) {
+      expect(arabicBlocked.error).toBe(copy("ar", "provider.onlyFour"));
+      expect(arabicBlocked.error).not.toContain("only connects");
+    }
     const rejected = await probeProvider({
       provider: "openai",
       apiKey: secret,
