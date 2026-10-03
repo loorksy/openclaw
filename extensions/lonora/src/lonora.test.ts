@@ -1293,11 +1293,90 @@ describe("responsibilities, memory, usage", () => {
       jobId: "briefing",
       agent: "market-watcher",
     });
+    service.recordModelUsage({
+      provider: "openrouter",
+      model: "auto",
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      sessionKey: "agent:main:research:case",
+      agent: "research-agent",
+    });
+    service.recordModelUsage({
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      sessionKey: "agent:main:subagent:child",
+      agent: "custom-helper",
+    });
+    service.recordModelUsage({
+      provider: "unknown",
+      model: "unknown",
+      inputTokens: 1,
+      outputTokens: 0,
+    });
+    store.addUsage({
+      id: "deep-read",
+      at: Date.now(),
+      provider: "zai",
+      model: "glm-4.5",
+      feature: "deep_analysis",
+      agent: "structure-analyst",
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      estimated: true,
+    });
     const summary = service.usageSummary(Date.now());
     expect(summary.estimated).toBe(true);
     expect(summary.byFeature.conversation).toBeGreaterThan(0);
     expect(summary.byFeature.market_monitoring).toBeGreaterThan(0);
+    expect(summary.byFeature.research).toBeGreaterThan(0);
+    expect(summary.byFeature.subagent).toBeGreaterThan(0);
+    expect(summary.byFeature.deep_analysis).toBeGreaterThan(0);
     expect(summary.byAgent["market-watcher"]).toBeGreaterThan(0);
+    expect(summary.byFeatureLabel[copy("en", "feature.market")]).toBe(
+      summary.byFeature.market_monitoring,
+    );
+    expect(summary.byFeatureLabel[copy("en", "feature.conversation")]).toBe(
+      summary.byFeature.conversation,
+    );
+    expect(summary.byFeatureLabel[copy("en", "feature.research")]).toBe(summary.byFeature.research);
+    expect(summary.byFeatureLabel[copy("en", "feature.specialist")]).toBe(
+      summary.byFeature.subagent,
+    );
+    expect(summary.byFeatureLabel[copy("en", "feature.deep")]).toBe(
+      summary.byFeature.deep_analysis,
+    );
+    expect(Object.keys(summary.byFeatureLabel).join(" ")).not.toMatch(
+      /market_monitoring|deep_analysis|subagent/,
+    );
+    expect(summary.byAgentLabel[copy("en", "name.marketWatcher")]).toBe(
+      summary.byAgent["market-watcher"],
+    );
+    expect(summary.byAgentLabel[copy("en", "name.lonora")]).toBe(summary.byAgent.lonora);
+    expect(summary.byAgentLabel[copy("en", "name.research")]).toBe(
+      summary.byAgent["research-agent"],
+    );
+    expect(summary.byAgentLabel[copy("en", "name.structure")]).toBe(
+      summary.byAgent["structure-analyst"],
+    );
+    expect(summary.byAgentLabel[copy("en", "feature.other")]).toBe(
+      summary.byAgent["custom-helper"],
+    );
+    expect(Object.keys(summary.byAgentLabel).join(" ")).not.toMatch(/market-watcher|custom-helper/);
+    expect(Object.keys(summary.byProviderLabel)).not.toContain("unknown");
+    expect(summary.byProviderLabel[copy("en", "usage.unknown")]).toBe(0);
+    expect(Object.keys(summary.byModelLabel)).not.toContain("unknown");
+    store.setLanguage("ar");
+    const arabic = service.usageSummary(Date.now());
+    expect(arabic.byFeature.market_monitoring).toBe(summary.byFeature.market_monitoring);
+    expect(arabic.byFeatureLabel[copy("ar", "feature.market")]).toBe(
+      arabic.byFeature.market_monitoring,
+    );
+    expect(Object.keys(arabic.byFeatureLabel).join(" ")).not.toContain("market_monitoring");
+    expect(arabic.byAgentLabel[copy("ar", "name.marketWatcher")]).toBeGreaterThan(0);
+    expect(Object.keys(arabic.byAgentLabel).join(" ")).not.toContain("market-watcher");
+    expect(arabic.byProviderLabel[copy("ar", "usage.unknown")]).toBe(0);
     expect(
       estimateCostUsd({
         provider: "anthropic",

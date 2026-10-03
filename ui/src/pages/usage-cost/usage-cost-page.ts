@@ -20,6 +20,10 @@ type UsageSummary = {
   byModel: Record<string, number>;
   byFeature: Record<string, number>;
   byAgent: Record<string, number>;
+  byProviderLabel?: Record<string, number>;
+  byModelLabel?: Record<string, number>;
+  byFeatureLabel?: Record<string, number>;
+  byAgentLabel?: Record<string, number>;
   unpricedEvents: number;
   estimated: true;
 };
@@ -118,10 +122,10 @@ class UsageCostPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.usage.unpriced")}</dt>
                   <dd>${summary.unpricedEvents}</dd>
                 </dl>
-                ${breakdown(t("lonora.usage.byProvider"), summary.byProvider)}
-                ${breakdown(t("lonora.usage.byModel"), summary.byModel)}
-                ${breakdown(t("lonora.usage.byFeature"), summary.byFeature)}
-                ${breakdown(t("lonora.usage.byAgent"), summary.byAgent)}
+                ${breakdown(t("lonora.usage.byProvider"), summary.byProviderLabel ?? summary.byProvider)}
+                ${breakdown(t("lonora.usage.byModel"), summary.byModelLabel ?? summary.byModel)}
+                ${breakdown(t("lonora.usage.byFeature"), summary.byFeatureLabel ?? summary.byFeature)}
+                ${breakdown(t("lonora.usage.byAgent"), summary.byAgentLabel ?? summary.byAgent)}
               `
             : nothing
         }

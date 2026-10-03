@@ -1213,7 +1213,16 @@ export class LonoraService {
   }
 
   usageSummary(now = Date.now()) {
-    return rollupUsage(this.store.listUsage(), now);
+    const rollup = rollupUsage(this.store.listUsage(), now);
+    const language = this.store.ensureLocalOwner().language;
+    const unread = (key: string) => (key === "unknown" ? copy(language, "usage.unknown") : key);
+    return {
+      ...rollup,
+      byProviderLabel: labelAmounts(rollup.byProvider, unread),
+      byModelLabel: labelAmounts(rollup.byModel, unread),
+      byFeatureLabel: labelAmounts(rollup.byFeature, (key) => featureLabel(key, language)),
+      byAgentLabel: labelAmounts(rollup.byAgent, (key) => usageAgentLabel(key, language)),
+    };
   }
 
   async connectProvider(input: { provider: string; apiKey: string; fetchImpl?: typeof fetch }) {
@@ -1474,6 +1483,45 @@ function planLine(language: OwnerLanguage, plan: RecommendationPlan): string {
   return target == null
     ? `${side} ${plan.entry}, ${levels}`
     : `${side} ${plan.entry}, ${levels}, ${copy(language, "memory.planTarget")} ${target}`;
+}
+
+function labelAmounts(
+  rows: Record<string, number>,
+  labelFor: (key: string) => string,
+): Record<string, number> {
+  const labeled: Record<string, number> = {};
+  for (const [key, amount] of Object.entries(rows)) {
+    const label = labelFor(key);
+    labeled[label] = (labeled[label] ?? 0) + amount;
+  }
+  return labeled;
+}
+
+function featureLabel(feature: string, language: OwnerLanguage): string {
+  switch (feature) {
+    case "conversation":
+      return copy(language, "feature.conversation");
+    case "market_monitoring":
+      return copy(language, "feature.market");
+    case "research":
+      return copy(language, "feature.research");
+    case "deep_analysis":
+      return copy(language, "feature.deep");
+    case "subagent":
+      return copy(language, "feature.specialist");
+    default:
+      return copy(language, "feature.other");
+  }
+}
+
+function usageAgentLabel(agent: string, language: OwnerLanguage): string {
+  if (agent === "lonora") {
+    return copy(language, "name.lonora");
+  }
+  if ((SPECIALISTS as readonly string[]).includes(agent)) {
+    return specialistName(agent as SpecialistId, language);
+  }
+  return copy(language, "feature.other");
 }
 
 function specialistName(agent: SpecialistId, language: OwnerLanguage): string {
