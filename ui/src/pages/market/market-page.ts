@@ -40,6 +40,8 @@ class MarketPage extends OpenClawLightDomElement {
     null;
   @state() private buySide: number | null = null;
   @state() private sellSide: number | null = null;
+  @state() private demandZone: ZoneView | null = null;
+  @state() private supplyZone: ZoneView | null = null;
   @state() private pattern: SwingRangeView | null = null;
   @state() private candleShape: CandleShapeView | null = null;
   @state() private dealingRange: DealingRangeView | null = null;
@@ -84,6 +86,8 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.buySide = null;
       this.sellSide = null;
+      this.demandZone = null;
+      this.supplyZone = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -218,6 +222,8 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.buySide = null;
       this.sellSide = null;
+      this.demandZone = null;
+      this.supplyZone = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -232,6 +238,8 @@ class MarketPage extends OpenClawLightDomElement {
         latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
         buySide?: number | null;
         sellSide?: number | null;
+        demand?: ZoneView | null;
+        supply?: ZoneView | null;
         pattern?: SwingRangeView | null;
         candleShape?: CandleShapeView | null;
         range?: DealingRangeView | null;
@@ -246,6 +254,8 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = read.invented ? null : (read.latestSweep ?? null);
       this.buySide = read.invented || !read.ok ? null : finitePrice(read.buySide);
       this.sellSide = read.invented || !read.ok ? null : finitePrice(read.sellSide);
+      this.demandZone = read.invented || !read.ok ? null : readZone(read.demand);
+      this.supplyZone = read.invented || !read.ok ? null : readZone(read.supply);
       this.pattern =
         read.invented || read.pattern?.inventedTarget !== false ? null : (read.pattern ?? null);
       this.candleShape =
@@ -263,6 +273,8 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = null;
       this.buySide = null;
       this.sellSide = null;
+      this.demandZone = null;
+      this.supplyZone = null;
       this.pattern = null;
       this.candleShape = null;
       this.dealingRange = null;
@@ -342,6 +354,10 @@ class MarketPage extends OpenClawLightDomElement {
                 <h2>${t("lonora.market.pools")}</h2>
                 <p>${poolText(this.buySide, "lonora.market.poolsBuy")}</p>
                 <p>${poolText(this.sellSide, "lonora.market.poolsSell")}</p>
+                <h2>${t("lonora.market.zones")}</h2>
+                <p>
+                  ${zonesText(this.demandZone, this.supplyZone, this.chartError, this.candles.length)}
+                </p>
                 <h2>${t("lonora.market.pattern")}</h2>
                 <p>${patternText(this.pattern, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.candle")}</h2>
@@ -595,6 +611,65 @@ function patternStageLabel(stage: string) {
     default:
       return t("lonora.market.patternUnknown");
   }
+}
+
+type ZoneView = {
+  type: "supply" | "demand";
+  low: number;
+  high: number;
+  grade: "A" | "B" | "C" | "reject" | null;
+  tradable: boolean;
+  invented: false;
+};
+
+function readZone(value: ZoneView | null | undefined): ZoneView | null {
+  if (!value || value.invented !== false) {
+    return null;
+  }
+  if (value.type !== "supply" && value.type !== "demand") {
+    return null;
+  }
+  if (!(value.low > 0) || !(value.high > value.low)) {
+    return null;
+  }
+  if (
+    value.grade != null &&
+    value.grade !== "A" &&
+    value.grade !== "B" &&
+    value.grade !== "C" &&
+    value.grade !== "reject"
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function zonesText(
+  demand: ZoneView | null,
+  supply: ZoneView | null,
+  error: string | null,
+  candleCount: number,
+) {
+  if (!demand && !supply) {
+    if (error && candleCount === 0) {
+      return t("lonora.market.chartUnavailable");
+    }
+    return t("lonora.market.zonesNone");
+  }
+  return [demand, supply]
+    .filter((zone): zone is ZoneView => zone != null)
+    .map((zone) => {
+      const label =
+        zone.type === "demand" ? t("lonora.market.zonesDemand") : t("lonora.market.zonesSupply");
+      const grade =
+        zone.grade == null
+          ? t("lonora.market.zonesUnread")
+          : `${t("lonora.market.zonesGrade")} ${zone.grade}. ${
+              zone.tradable ? t("lonora.market.zonesTradable") : t("lonora.market.zonesNotTradable")
+            }`;
+      return `${label} ${zone.low}–${zone.high}. ${grade}`;
+    })
+    .join(" ");
 }
 
 function finitePrice(value: unknown): number | null {

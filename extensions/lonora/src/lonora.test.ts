@@ -24,6 +24,43 @@ import { planBotyMigration } from "./migrate-boty.js";
 import { LonoraService } from "./service.js";
 import { LonoraStore } from "./store.js";
 
+function impulseZones(now: number): Candle[] {
+  const bars: Candle[] = [];
+  for (let index = 0; index < 13; index += 1) {
+    bars.push({
+      time: now - (16 - index) * 3_600_000,
+      open: 100,
+      high: 101,
+      low: 99,
+      close: 100,
+    });
+  }
+  bars.push(
+    {
+      time: now - 3 * 3_600_000,
+      open: 100,
+      high: 101,
+      low: 98,
+      close: 99,
+    },
+    {
+      time: now - 2 * 3_600_000,
+      open: 102,
+      high: 113,
+      low: 101,
+      close: 112,
+    },
+    {
+      time: now - 3_600_000,
+      open: 112,
+      high: 112,
+      low: 89,
+      close: 90,
+    },
+  );
+  return bars;
+}
+
 function hourlyCloses(now: number, closes: number[]): Candle[] {
   return closes.map((close, index) => ({
     time: now - (closes.length - index) * 3_600_000,
@@ -126,6 +163,21 @@ describe("structure", () => {
     const arabic = runSpecialist("liquidity-analyst", { candles, language: "ar" });
     expect(arabic.summary).toContain("مسح سيولة شرائية عند 101.5");
     expect(arabic.summary).not.toContain("Buy-side sweep");
+  });
+
+  it("names the nearest supply and demand zones without a trade", () => {
+    const candles = impulseZones(Date.UTC(2026, 0, 14, 15, 0));
+    const result = runSpecialist("supply-demand-analyst", { candles });
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain("Demand 98–100, grade ");
+    expect(result.summary).toContain("Supply 102–113, grade ");
+    expect(result.summary).not.toMatch(/\b(buy|sell)\b/i);
+    expect(result.data.demand).toMatchObject({ low: 98, high: 100, invented: false });
+    expect(result.data.supply).toMatchObject({ low: 102, high: 113, invented: false });
+    const arabic = runSpecialist("supply-demand-analyst", { candles, language: "ar" });
+    expect(arabic.summary).toContain("طلب 98–100");
+    expect(arabic.summary).toContain("عرض 102–113");
+    expect(arabic.summary).not.toContain("Demand");
   });
 
   it("fails closed when the sample is too short", () => {
@@ -1218,6 +1270,80 @@ describe("market data", () => {
     expect(service.ownerBrief()).toContain("آخر سيولة: سيولة شرائية راكدة 101.5.");
     expect(service.ownerBrief()).toContain("مسح سيولة شرائية عند 101.5.");
     expect(service.ownerBrief()).not.toContain("Latest liquidity:");
+    store.close();
+  });
+
+  it("keeps the nearest supply and demand zones in the gold brief", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    const zoned = impulseZones(openAt);
+    service.readCandles = async () => ({
+      ok: true,
+      candles: zoned,
+      price: 90,
+      stale: false,
+      invented: false,
+    });
+
+    const closed = await service.monitorOnce(closedAt);
+    expect(closed.dataStatus).toBe("closed");
+    expect(service.recall("98", "zone_read")).toEqual([]);
+
+    const read = await service.readVisibleCandles(openAt);
+    expect(read.invented).toBe(false);
+    expect(read.demand).toMatchObject({ type: "demand", low: 98, high: 100, invented: false });
+    expect(read.supply).toMatchObject({ type: "supply", low: 102, high: 113, invented: false });
+    expect(service.ownerBrief()).toContain("Latest zones: Demand 98–100, grade ");
+    expect(service.ownerBrief()).toContain("Supply 102–113, grade ");
+    expect(service.recall("Demand", "zone_read")[0]?.content).not.toMatch(/\b(buy|sell)\b/i);
+    expect(service.ownerBrief()).not.toMatch(/%/);
+    expect(service.remember("zone_read", "invented zone 9999", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief()).not.toContain("9999");
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: hourlyCloses(
+        openAt,
+        Array.from({ length: 16 }, () => 50),
+      ),
+      price: 50,
+      stale: false,
+      invented: false,
+    });
+    const replaced = await service.readVisibleCandles(openAt);
+    expect(replaced.demand).toBeNull();
+    expect(replaced.supply).toBeNull();
+    expect(service.ownerBrief()).toContain(copy("en", "zones.none"));
+    expect(service.ownerBrief()).not.toContain("98–100");
+
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.readVisibleCandles(openAt);
+    expect(failed.ok).toBe(false);
+    expect(failed.demand).toBeNull();
+    expect(service.ownerBrief()).toContain(copy("en", "zones.none"));
+
+    store.setLanguage("ar");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: zoned,
+      price: 90,
+      stale: false,
+      invented: false,
+    });
+    await service.readVisibleCandles(openAt);
+    expect(service.ownerBrief()).toContain("آخر مناطق: طلب 98–100");
+    expect(service.ownerBrief()).toContain("عرض 102–113");
+    expect(service.ownerBrief()).not.toContain("Latest zones:");
+    expect(service.recall("طلب", "zone_read")[0]?.content).not.toMatch(/شراء|بيع/);
     store.close();
   });
 

@@ -12,6 +12,7 @@ export type MemoryKind =
   | "market_observation"
   | "structure_read"
   | "liquidity_read"
+  | "zone_read"
   | "recommendation"
   | "historical_case"
   | "lesson"

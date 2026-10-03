@@ -222,6 +222,103 @@ function selectZone(
   return ranked[0] ?? null;
 }
 
+export interface NamedZone {
+  type: "supply" | "demand";
+  low: number;
+  high: number;
+  grade: "A" | "B" | "C" | "reject" | null;
+  tradable: boolean;
+  invented: false;
+}
+
+/** Nearest demand and supply. A grade is not a trade. */
+export function nearestGoldZones(candles: readonly Candle[]): {
+  demand: NamedZone | null;
+  supply: NamedZone | null;
+} {
+  const visible = candles.filter((candle) => isSaneCandle(candle));
+  const price = visible.at(-1)?.close;
+  if (visible.length < 6 || price == null || !(price > 0)) {
+    return { demand: null, supply: null };
+  }
+  const zones = detectSupplyDemandZones(visible);
+  const atr = calculateAtr(visible);
+  const swings = detectSwings(visible);
+  const levels = detectMajorLevels(visible, priorDayCandles(visible));
+  const context = {
+    candles: visible,
+    currentPrice: price,
+    atr,
+    structureEvents: detectStructureEvents(visible, swings, atr),
+    sweeps: analyzeLiquidity(visible).sweeps,
+    range: rangeSpan(visible),
+    htfLevels: [...levels.support, ...levels.resistance].map((level) => level.price),
+    otherZones: zones,
+  };
+  return {
+    demand: nameZone(zones, "demand", price, context),
+    supply: nameZone(zones, "supply", price, context),
+  };
+}
+
+export function describeNearestZones(
+  language: OwnerLanguage,
+  zones: { demand: NamedZone | null; supply: NamedZone | null },
+  candleCount: number,
+): string {
+  if (candleCount < 6) {
+    return copy(language, "zones.short");
+  }
+  const parts = [zones.demand, zones.supply]
+    .filter((zone): zone is NamedZone => zone != null)
+    .map((zone) => zoneSentence(language, zone));
+  return parts.length > 0 ? parts.join(" ") : copy(language, "zones.none");
+}
+
+function nameZone(
+  zones: SupplyDemandZone[],
+  type: "supply" | "demand",
+  price: number,
+  context: Omit<Parameters<typeof scoreZone>[0], "zone">,
+): NamedZone | null {
+  const typed = zones
+    .filter((zone) => zone.type === type)
+    .sort(
+      (left, right) =>
+        distanceToZone(price, left) - distanceToZone(price, right) || right.time - left.time,
+    );
+  const zone = typed[0];
+  if (!zone || !(zone.high > zone.low)) {
+    return null;
+  }
+  const score = scoreZone({ ...context, zone });
+  const ungraded = score.reasons.includes("insufficient");
+  return {
+    type,
+    low: zone.low,
+    high: zone.high,
+    grade: ungraded ? null : score.grade,
+    tradable: ungraded ? false : score.tradable,
+    invented: false,
+  };
+}
+
+function zoneSentence(language: OwnerLanguage, zone: NamedZone): string {
+  const kind = copy(language, zone.type === "demand" ? "zones.demand" : "zones.supply");
+  const grade =
+    zone.grade == null
+      ? copy(language, "zones.ungraded")
+      : `${copy(language, "zones.grade")} ${zone.grade}, ${copy(language, zone.tradable ? "zones.tradable" : "zones.notTradable")}`;
+  return `${kind} ${zone.low}–${zone.high}, ${grade}.`;
+}
+
+function distanceToZone(price: number, zone: SupplyDemandZone): number {
+  if (price >= zone.low && price <= zone.high) {
+    return 0;
+  }
+  return Math.min(Math.abs(price - zone.low), Math.abs(price - zone.high));
+}
+
 export function selectStructuralTargets(input: {
   action: "buy" | "sell";
   entry: number;

@@ -46,7 +46,7 @@ import {
 import { bindTelegram, type OwnerLanguage } from "./domain/owner.js";
 import { classifySwingRange, describePattern } from "./domain/patterns.js";
 import { assertPermission, authorizeTrade, blockReasonForTool } from "./domain/permissions.js";
-import { prepareGoldPlan } from "./domain/plan.js";
+import { describeNearestZones, nearestGoldZones, prepareGoldPlan } from "./domain/plan.js";
 import { isLonoraProvider, probeProvider, type LonoraProviderId } from "./domain/providers.js";
 import { computeRangePosition, describeRange } from "./domain/range-position.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
@@ -269,6 +269,8 @@ export class LonoraService {
         latestSweep: null,
         buySide: null,
         sellSide: null,
+        demand: null,
+        supply: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -280,6 +282,7 @@ export class LonoraService {
       GOLD_BAR_MS,
     );
     const resting = this.noteLiquidity(visible.candles);
+    const zones = this.noteZones(visible.candles);
     this.noteStructure(visible.candles);
     return {
       ok: visible.candles.length > 0,
@@ -287,6 +290,8 @@ export class LonoraService {
       latestSweep: resting.sweep,
       buySide: resting.buySide,
       sellSide: resting.sellSide,
+      demand: zones.demand,
+      supply: zones.supply,
       pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
       candleShape: visible.candles.length > 0 ? latestCandleShape(visible.candles) : null,
       range:
@@ -350,6 +355,7 @@ export class LonoraService {
         candles = visible.candles as Candle[];
         this.noteStructure(candles);
         this.noteLiquidity(candles);
+        this.noteZones(candles);
         this.lastDataStatus = visible.stale ? "stale" : "ok";
         this.lastDataError = visible.stale ? "Candle data is stale." : null;
         price = candles.at(-1)?.close ?? null;
@@ -636,7 +642,7 @@ export class LonoraService {
   }
 
   remember(kind: MemoryKind, content: string, symbol?: string) {
-    if (kind === "structure_read" || kind === "liquidity_read") {
+    if (kind === "structure_read" || kind === "liquidity_read" || kind === "zone_read") {
       return null;
     }
     return this.store.addMemory({ kind, content, symbol });
@@ -692,6 +698,26 @@ export class LonoraService {
     return resting;
   }
 
+  /**
+   * One supply and demand sentence from the same closed candles.
+   * The next read replaces it. A grade is not a trade.
+   */
+  private noteZones(candles: Candle[]) {
+    const zones = nearestGoldZones(candles);
+    if (candles.length === 0) {
+      return zones;
+    }
+    const language = this.store.ensureLocalOwner().language;
+    const text = describeNearestZones(language, zones, candles.length)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("zone_read", "XAUUSD", text);
+    }
+    return zones;
+  }
+
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
   noteConversation(messages: readonly unknown[]): string | null {
     const text = latestOwnerText(messages);
@@ -722,6 +748,7 @@ export class LonoraService {
     const observation = this.store.listRecentMemory("market_observation", 1);
     const structure = this.store.listRecentMemory("structure_read", 1);
     const liquidity = this.store.listRecentMemory("liquidity_read", 1);
+    const zones = this.store.listRecentMemory("zone_read", 1);
     const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
@@ -737,6 +764,7 @@ export class LonoraService {
       observation.length === 0 &&
       structure.length === 0 &&
       liquidity.length === 0 &&
+      zones.length === 0 &&
       conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
@@ -755,6 +783,9 @@ export class LonoraService {
     }
     if (liquidity[0]) {
       lines.push(`${copy(language, "memory.liquidity")} ${liquidity[0].content}`);
+    }
+    if (zones[0]) {
+      lines.push(`${copy(language, "memory.zones")} ${zones[0].content}`);
     }
     if (conversation[0]) {
       lines.push(`${copy(language, "memory.conversation")} ${conversation[0].content}`);

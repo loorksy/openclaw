@@ -8,7 +8,6 @@ import {
   biasFromCandles,
   calculateAtr,
   detectMajorLevels,
-  detectSupplyDemandZones,
   detectSwings,
   detectTrend,
   type Candle,
@@ -20,6 +19,7 @@ import { describeRestingLiquidity, restingLiquidity } from "./liquidity-sweeps.j
 import { priorGoldDay } from "./market.js";
 import type { OwnerLanguage } from "./owner.js";
 import { classifySwingRange, describePattern } from "./patterns.js";
+import { describeNearestZones, nearestGoldZones } from "./plan.js";
 import { computeRangePosition, describeRange } from "./range-position.js";
 import { detectStructureEvents, latestStructureEvent } from "./structure.js";
 
@@ -158,25 +158,25 @@ export function runLiquidityAnalyst(
   };
 }
 
-export function runSupplyDemandAnalyst(candles: Candle[]): SpecialistResult {
+export function runSupplyDemandAnalyst(
+  candles: Candle[],
+  language: OwnerLanguage = "en",
+): SpecialistResult {
   if (candles.length < 6) {
     return {
       agent: "supply-demand-analyst",
       ok: false,
-      summary: "Not enough candles to mark supply and demand.",
+      summary: copy(language, "zones.short"),
       data: {},
       failure: "insufficient_candles",
     };
   }
-  const zones = detectSupplyDemandZones(candles);
-  const last = zones.at(-1);
+  const zones = nearestGoldZones(candles);
   return {
     agent: "supply-demand-analyst",
     ok: true,
-    summary: last
-      ? `${zones.length} zones, latest ${last.type} ${last.low}-${last.high}`
-      : "No impulse zones in the supplied candles.",
-    data: { zones },
+    summary: describeNearestZones(language, zones, candles.length),
+    data: { demand: zones.demand, supply: zones.supply },
   };
 }
 
@@ -264,7 +264,7 @@ export function runSpecialist(
     case "liquidity-analyst":
       return runLiquidityAnalyst(input.candles ?? [], input.language ?? "en");
     case "supply-demand-analyst":
-      return runSupplyDemandAnalyst(input.candles ?? []);
+      return runSupplyDemandAnalyst(input.candles ?? [], input.language ?? "en");
     case "multi-timeframe-analyst":
       return runMultiTimeframeAnalyst({
         lower: input.candles ?? [],
