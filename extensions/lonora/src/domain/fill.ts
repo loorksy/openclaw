@@ -59,11 +59,40 @@ export function resolveTargetHit(input: {
   };
 }
 
+export interface RetestZone {
+  from: number;
+  to: number;
+}
+
+/** The band a retest may fill inside, or null when it is missing or already through the stop. */
+export function tradableRetestBand(input: {
+  direction: "buy" | "sell";
+  zone: RetestZone | null | undefined;
+  stopLoss: number;
+}): { low: number; high: number } | null {
+  const zone = input.zone;
+  if (!zone || !Number.isFinite(zone.from) || !Number.isFinite(zone.to)) {
+    return null;
+  }
+  if (!Number.isFinite(input.stopLoss)) {
+    return null;
+  }
+  const low = Math.min(zone.from, zone.to);
+  const high = Math.max(zone.from, zone.to);
+  if (!(high > low)) {
+    return null;
+  }
+  const pastStop = input.direction === "buy" ? low <= input.stopLoss : high >= input.stopLoss;
+  return pastStop ? null : { low, high };
+}
+
 export function resolveFill(input: {
   plan: {
     direction: "buy" | "sell";
-    entryType: "market" | "limit_touch" | "confirmation_close";
+    entryType: "market" | "limit_touch" | "confirmation_close" | "retest_zone";
     entry: number;
+    retestZone?: RetestZone | null;
+    stopLoss?: number;
   };
   candle: FillCandle;
   conditionMet: boolean;
@@ -82,6 +111,21 @@ export function resolveFill(input: {
       return { filled: false };
     }
     return { filled: true, effectiveEntry: candle.close };
+  }
+  if (plan.entryType === "retest_zone") {
+    const band = tradableRetestBand({
+      direction: plan.direction,
+      zone: plan.retestZone,
+      stopLoss: plan.stopLoss ?? Number.NaN,
+    });
+    if (!band || !(candle.low <= band.high && candle.high >= band.low)) {
+      return { filled: false };
+    }
+    const edge = plan.direction === "buy" ? band.high : band.low;
+    return {
+      filled: true,
+      effectiveEntry: Math.min(candle.high, Math.max(candle.low, edge)),
+    };
   }
   const tolerance =
     input.tolerance != null && Number.isFinite(input.tolerance) && input.tolerance > 0

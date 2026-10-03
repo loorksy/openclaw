@@ -13,7 +13,13 @@ import {
   type ActivationRule,
 } from "./activation-rule.js";
 import { calculateAtr } from "./candles.js";
-import { entryFillTolerance, resolveFill, resolveTargetHit, targetHitTolerance } from "./fill.js";
+import {
+  entryFillTolerance,
+  resolveFill,
+  resolveTargetHit,
+  targetHitTolerance,
+  type RetestZone,
+} from "./fill.js";
 
 export type RecommendationStatus =
   | "pending_entry"
@@ -37,7 +43,7 @@ export type RecommendationOutcome =
   | "invalidated";
 
 export type Direction = "buy" | "sell";
-export type EntryType = "market" | "limit_touch" | "confirmation_close";
+export type EntryType = "market" | "limit_touch" | "confirmation_close" | "retest_zone";
 export type InvalidationMode = "touch" | "close";
 
 export interface RecommendationPlan {
@@ -47,6 +53,8 @@ export interface RecommendationPlan {
   entryType: EntryType;
   entry: number;
   effectiveEntry?: number;
+  /** Fill band for a retest. A missing or unusable band never fills. */
+  retestZone?: RetestZone | null;
   stopLoss: number;
   targets: number[];
   invalidationMode?: InvalidationMode;
@@ -134,9 +142,15 @@ function filled(
   if (plan.entryType === "market") {
     return { filled: true, price: plan.effectiveEntry ?? plan.entry };
   }
-  if (plan.entryType === "limit_touch") {
+  if (plan.entryType === "limit_touch" || plan.entryType === "retest_zone") {
     const fill = resolveFill({
-      plan: { direction: plan.direction, entryType: "limit_touch", entry: plan.entry },
+      plan: {
+        direction: plan.direction,
+        entryType: plan.entryType,
+        entry: plan.entry,
+        retestZone: plan.retestZone,
+        stopLoss: plan.stopLoss,
+      },
       candle,
       conditionMet: true,
       armedBefore: false,
@@ -175,8 +189,9 @@ export function evaluateRecommendation(
       : null;
   const activation =
     parsedRule && parsedRule !== "blocked" ? createActivationEvaluator(parsedRule) : null;
+  const retest = plan.entryType === "retest_zone";
   const closeFill =
-    parsedRule && parsedRule !== "blocked" ? activationRequiresClose(parsedRule) : false;
+    !retest && parsedRule && parsedRule !== "blocked" ? activationRequiresClose(parsedRule) : false;
   const mode =
     plan.invalidationMode ??
     (parsedRule ? "close" : plan.entryType === "market" ? "touch" : "close");
@@ -264,6 +279,7 @@ export function evaluateRecommendation(
     if (
       triggeredAt != null &&
       candle.time === triggeredAt &&
+      !retest &&
       (closeFill || plan.entryType === "confirmation_close")
     ) {
       continue;

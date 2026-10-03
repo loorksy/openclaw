@@ -17,6 +17,7 @@ import {
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { copy, marketReasonCopy } from "./domain/copy.js";
+import { tradableRetestBand } from "./domain/fill.js";
 import {
   describeHeadlines,
   headlineSetKey,
@@ -829,7 +830,20 @@ function activationSummary(plan: RecommendationPlan, language: "en" | "ar"): str
     return copy(language, "recommendations.unreadable");
   }
   const rule = plan.activationRule ? parseActivationRule(plan.activationRule) : null;
-  return rule ? describeActivationRule(rule, language) : null;
+  const ruleText = rule ? describeActivationRule(rule, language) : null;
+  if (plan.entryType !== "retest_zone") {
+    return ruleText;
+  }
+  const band = tradableRetestBand({
+    direction: plan.direction,
+    zone: plan.retestZone,
+    stopLoss: plan.stopLoss,
+  });
+  if (!band) {
+    return copy(language, "entry.retestMissing");
+  }
+  const bandText = `${copy(language, "entry.retest")} ${band.low}–${band.high}`;
+  return ruleText ? `${ruleText} ${bandText}` : bandText;
 }
 
 function purposeFor(agent: SpecialistId): string {

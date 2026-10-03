@@ -6,6 +6,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { activationRequiresClose, parseActivationRule } from "./domain/activation-rule.js";
 import { isGoldSymbol } from "./domain/candles.js";
+import { tradableRetestBand, type RetestZone } from "./domain/fill.js";
 import { OwnerSelectionRequired, resolveOwnerCandidate } from "./domain/owner.js";
 import type {
   RecommendationOutcome,
@@ -118,11 +119,21 @@ export function planBotyMigration(input: {
         const targets = parseTargets(row.targets_json);
         const createdAt = recommendationCreatedAt(source, row.id, importedAt);
         const rule = parseActivationRule(row.activation_rule_json);
+        const entry = importedEntry({
+          declared: row.entry_type,
+          riskJson: row.risk_json,
+          direction: row.direction,
+          stopLoss: row.stop_loss,
+          closeRule: Boolean(rule && activationRequiresClose(rule)),
+        });
+        if (entry.warning) {
+          report.warnings.push(`Recommendation ${row.id}: ${entry.warning}`);
+        }
         const plan: RecommendationPlan = {
           id: `boty-${row.id}`,
           symbol: "XAUUSD",
           direction: row.direction,
-          entryType: rule && activationRequiresClose(rule) ? "confirmation_close" : "limit_touch",
+          entryType: entry.entryType,
           entry: row.entry,
           stopLoss: row.stop_loss,
           targets,
@@ -132,6 +143,7 @@ export function planBotyMigration(input: {
           createdAt,
           rationale: row.rationale ?? undefined,
           confidence: row.confidence,
+          ...(entry.retestZone ? { retestZone: entry.retestZone } : {}),
           ...(rule ? { activationRule: rule } : {}),
           ...(unreadableRule(row.activation_rule_json) ? { activationUnreadable: true } : {}),
         };
@@ -154,12 +166,12 @@ export function planBotyMigration(input: {
 
 function loadRecommendations(source: DatabaseSync, userId: number) {
   const columns = source.prepare("PRAGMA table_info(recommendations)").all() as { name: string }[];
-  const ruleSql = columns.some((column) => column.name === "activation_rule_json")
-    ? "activation_rule_json"
-    : "NULL AS activation_rule_json";
+  const ruleSql = columnOrNull(columns, "activation_rule_json");
+  const entrySql = columnOrNull(columns, "entry_type");
+  const riskSql = columnOrNull(columns, "risk_json");
   return source
     .prepare(
-      `SELECT id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, ${ruleSql}
+      `SELECT id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, ${ruleSql}, ${entrySql}, ${riskSql}
        FROM recommendations WHERE user_id = ?`,
     )
     .all(userId) as {
@@ -173,7 +185,80 @@ function loadRecommendations(source: DatabaseSync, userId: number) {
     confidence: number;
     status: string;
     activation_rule_json: string | null;
+    entry_type: string | null;
+    risk_json: string | null;
   }[];
+}
+
+function columnOrNull(columns: { name: string }[], name: string): string {
+  return columns.some((column) => column.name === name) ? name : `NULL AS ${name}`;
+}
+
+function importedEntry(input: {
+  declared: string | null;
+  riskJson: string | null;
+  direction: "buy" | "sell";
+  stopLoss: number;
+  closeRule: boolean;
+}): { entryType: RecommendationPlan["entryType"]; retestZone?: RetestZone; warning?: string } {
+  const zone = retestZoneFromRisk(input.riskJson);
+  const declared = (input.declared ?? "").toLowerCase();
+  const retest = declared === "retest_zone" || (input.closeRule && zone != null);
+  if (retest) {
+    const band = tradableRetestBand({
+      direction: input.direction,
+      zone,
+      stopLoss: input.stopLoss,
+    });
+    return {
+      entryType: "retest_zone",
+      ...(zone ? { retestZone: zone } : {}),
+      ...(band
+        ? {}
+        : {
+            warning: zone
+              ? "retest band reaches the stop, so it will not fill."
+              : "retest has no band, so it will not fill.",
+          }),
+    };
+  }
+  if (input.closeRule) {
+    return { entryType: "confirmation_close" };
+  }
+  if (declared === "market" || declared === "confirmation_close" || declared === "limit_touch") {
+    return { entryType: declared };
+  }
+  return { entryType: "limit_touch" };
+}
+
+function retestZoneFromRisk(value: string | null): RetestZone | null {
+  if (!value) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+  const zone = (parsed as { retestZone?: unknown }).retestZone;
+  if (!zone || typeof zone !== "object") {
+    return null;
+  }
+  const from = (zone as { from?: unknown }).from;
+  const to = (zone as { to?: unknown }).to;
+  if (
+    typeof from !== "number" ||
+    typeof to !== "number" ||
+    !Number.isFinite(from) ||
+    !Number.isFinite(to)
+  ) {
+    return null;
+  }
+  return { from, to };
 }
 
 function unreadableRule(value: string | null): boolean {

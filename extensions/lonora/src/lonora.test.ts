@@ -241,6 +241,42 @@ describe("recommendations", () => {
     expect(stopped.outcome).toBe("loss");
   });
 
+  it("waits for a return into the retest band after the confirming close", () => {
+    const waiting = evaluateRecommendation(
+      plan({
+        direction: "sell",
+        entryType: "retest_zone",
+        entry: 4348,
+        stopLoss: 4360,
+        targets: [4200],
+        retestZone: { from: 4344, to: 4349 },
+        activationRule: { kind: "candle_close_below", level: 4348, timeframe: "15m" },
+      }),
+      [{ time: 2_000, open: 4340, high: 4342, low: 4332, close: 4335 }],
+    );
+    expect(waiting.triggered).toBe(false);
+    expect(waiting.status).toBe("pending_entry");
+    const filled = evaluateRecommendation(
+      plan({
+        direction: "sell",
+        entryType: "retest_zone",
+        entry: 4348,
+        stopLoss: 4360,
+        targets: [4200],
+        retestZone: { from: 4344, to: 4349 },
+        activationRule: { kind: "candle_close_below", level: 4348, timeframe: "15m" },
+      }),
+      [
+        { time: 2_000, open: 4340, high: 4342, low: 4332, close: 4335 },
+        { time: 3_000, open: 4338, high: 4346, low: 4336, close: 4341 },
+      ],
+    );
+    expect(filled.triggered).toBe(true);
+    expect(filled.triggeredAt).toBe(3_000);
+    expect(filled.effectiveEntry).toBe(4344);
+    expect(filled.outcome).toBe("pending");
+  });
+
   it("does not touch-fill a plan whose activation rule cannot be read", () => {
     const evaluation = evaluateRecommendation(plan({ activationUnreadable: true }), [
       candle(2_000, 2290, 2310, 2305),
@@ -783,6 +819,84 @@ describe("delegation and migration", () => {
     expect(
       service.listRecommendations().find((item) => item.id === "boty-1")?.activationSummary,
     ).toMatch(/2300/);
+    target.close();
+  });
+
+  it("imports a Boty retest band and leaves a bandless retest unfilled", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "boty-retest-")), "boty.sqlite");
+    const source = new DatabaseSync(file);
+    source.exec(`
+      CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);
+      CREATE TABLE trading_settings (user_id INTEGER, language TEXT, telegram_chat_id TEXT);
+      CREATE TABLE recommendations (
+        id INTEGER, user_id INTEGER, symbol TEXT, direction TEXT, entry REAL,
+        stop_loss REAL, targets_json TEXT, rationale TEXT, confidence INTEGER, status TEXT,
+        activation_rule_json TEXT, entry_type TEXT, risk_json TEXT
+      );
+      CREATE TABLE semantic_memories (
+        id INTEGER, user_id INTEGER, content TEXT, memory_type TEXT, symbol TEXT, archived INTEGER
+      );
+    `);
+    source.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(7, "owner@example.com");
+    source
+      .prepare(
+        "INSERT INTO trading_settings (user_id, language, telegram_chat_id) VALUES (?, ?, ?)",
+      )
+      .run(7, "en", null);
+    const rule = JSON.stringify({ kind: "candle_close_below", level: 4348, timeframe: "15m" });
+    const insert = source.prepare(
+      "INSERT INTO recommendations (id, user_id, symbol, direction, entry, stop_loss, targets_json, rationale, confidence, status, activation_rule_json, entry_type, risk_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    insert.run(
+      1,
+      7,
+      "XAUUSD",
+      "sell",
+      4348,
+      4360,
+      "[4320]",
+      "retest",
+      70,
+      "pending_entry",
+      rule,
+      "retest_zone",
+      JSON.stringify({ retestZone: { from: 4344, to: 4349 } }),
+    );
+    insert.run(
+      2,
+      7,
+      "XAUUSD",
+      "sell",
+      4348,
+      4360,
+      "[4320]",
+      "missing",
+      70,
+      "pending_entry",
+      rule,
+      "retest_zone",
+      "{}",
+    );
+    source.close();
+    const target = LonoraStore.open(":memory:");
+    const applied = planBotyMigration({ sourcePath: file, target, apply: true });
+    expect(applied.warnings.join(" ")).toMatch(/no band/);
+    const plans = target.listRecommendations();
+    expect(plans.find((item) => item.id === "boty-1")).toMatchObject({
+      entryType: "retest_zone",
+      retestZone: { from: 4344, to: 4349 },
+    });
+    expect(plans.find((item) => item.id === "boty-2")?.entryType).toBe("retest_zone");
+    expect(plans.find((item) => item.id === "boty-2")?.retestZone).toBeUndefined();
+    const service = new LonoraService(target);
+    service.gradeRecommendations([
+      { time: Date.now() + 60_000, open: 4346, high: 4347, low: 4344, close: 4345 },
+    ]);
+    const graded = target.listRecommendations();
+    expect(graded.find((item) => item.id === "boty-2")?.status).toBe("pending_entry");
+    expect(
+      service.listRecommendations().find((item) => item.id === "boty-1")?.activationSummary,
+    ).toMatch(/4344/);
     target.close();
   });
 });
