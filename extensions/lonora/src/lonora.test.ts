@@ -948,6 +948,18 @@ describe("market data", () => {
     }
   });
 
+  it("names the open centers on the market snapshot", () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const winter = service.marketSnapshot(Date.UTC(2026, 0, 14, 15, 0));
+    expect(winter.centers).toBe("London and New York are open. London and New York overlap.");
+    expect(winter.invented).toBe(false);
+    expect(winter.clock.session).toBe("newyork");
+    store.setLanguage("ar");
+    expect(service.marketSnapshot(Date.UTC(2026, 0, 17, 12, 0)).centers).toContain("سيدني");
+    store.close();
+  });
+
   it("drops a candle that has not closed yet", async () => {
     const store = LonoraStore.open(":memory:");
     const service = new LonoraService(store);

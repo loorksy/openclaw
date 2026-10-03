@@ -44,6 +44,7 @@ import { computeRangePosition } from "./domain/range-position.js";
 import { evaluateRecommendation, type RecommendationPlan } from "./domain/recommendations.js";
 import { checkResponsibility } from "./domain/responsibilities.js";
 import { summarizeScenario } from "./domain/scenario.js";
+import { describeTradingCenters, getTradingSessionInfo } from "./domain/trading-sessions.js";
 import {
   classifyFeature,
   dailyBudgetAllows,
@@ -108,6 +109,7 @@ export class LonoraService {
     return {
       symbol: "XAUUSD",
       clock,
+      centers: this.sessionSentence(now),
       message: marketReasonCopy(owner.language, clock.reason),
       lastPrice: observation?.price ?? null,
       stale:
@@ -621,6 +623,14 @@ export class LonoraService {
 
   recall(query: string, kind?: MemoryKind) {
     return this.store.searchMemory(query, kind);
+  }
+
+  /** Centers open on their own clocks. Does not describe how price will move. */
+  sessionSentence(now = Date.now()): string {
+    return describeTradingCenters(
+      getTradingSessionInfo(now),
+      this.store.ensureLocalOwner().language,
+    );
   }
 
   /** One gold brief for every door. An empty store does not invent a rate. */

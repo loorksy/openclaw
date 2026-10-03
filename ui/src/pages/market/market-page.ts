@@ -20,6 +20,7 @@ type MarketSnapshot = {
   stale: boolean;
   invented: false;
   clock: { isOpen: boolean; session: string; reason: string };
+  centers?: string;
   recommendations: { id: string; direction: string; status: string }[];
   responsibilities: { id: string; title: string; status: string }[];
   dataStatus?: string;
@@ -283,7 +284,7 @@ class MarketPage extends OpenClawLightDomElement {
                   <dt>${t("lonora.market.symbol")}</dt>
                   <dd>${snapshot.symbol}</dd>
                   <dt>${t("lonora.market.session")}</dt>
-                  <dd>${snapshot.clock.session}</dd>
+                  <dd>${snapshot.centers || snapshot.clock.session}</dd>
                   <dt>${t("lonora.market.state")}</dt>
                   <dd>
                     ${snapshot.clock.isOpen ? t("lonora.market.open") : t("lonora.market.closed")}
