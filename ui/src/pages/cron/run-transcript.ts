@@ -3,7 +3,10 @@ import { html, nothing, type ReactiveController, type ReactiveControllerHost } f
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { CronRunLogEntry } from "../../api/types.ts";
 import { t } from "../../i18n/index.ts";
+import { registerCronEnglish } from "../../i18n/locales/en-cron.ts";
 import { visibleChatHistoryMessages } from "../../lib/chat/message-visibility.ts";
+
+registerCronEnglish();
 import { formatUiError } from "../../lib/format-error.ts";
 import { attachHistoryActivity } from "../chat/chat-history-request.ts";
 import { mergeChatTranscriptPages } from "../chat/chat-transcript-pages.ts";

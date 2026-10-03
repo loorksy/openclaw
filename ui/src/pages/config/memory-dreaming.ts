@@ -10,8 +10,10 @@ import {
   renderSettingsToggleRow,
 } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
+import { registerCronEnglish } from "../../i18n/locales/en-cron.ts";
 import { registerSettingsEnglish } from "../../i18n/locales/en-settings.ts";
 
+registerCronEnglish();
 registerSettingsEnglish();
 
 /** Manifest bounds for a numeric field; `count` is `{integer, minimum}`, `ratio` is `0..1`. */

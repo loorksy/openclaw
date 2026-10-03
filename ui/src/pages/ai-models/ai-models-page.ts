@@ -4,10 +4,13 @@ import { state } from "lit/decorators.js";
 import { titleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import { t } from "../../i18n/index.ts";
+import { registerLonoraEnglish } from "../../i18n/locales/en-lonora.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import { lonoraRequestTarget } from "../lonora/request.ts";
 import { connectLonoraModel } from "./connect.ts";
+
+registerLonoraEnglish();
 
 type ProviderStatus = {
   provider: "anthropic" | "openai" | "zai" | "openrouter";
