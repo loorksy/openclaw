@@ -121,6 +121,34 @@ export function applyStopDistanceFloor(input: {
   return { stop: widened, floor, widened: true };
 }
 
+/** Preferred net reward after a quoted spread. A missing spread is not treated as zero. */
+export const MIN_NET_TP1_R = 2.5;
+const SLIPPAGE_SPREAD_MULT = 0.5;
+
+export function executionCost(spread?: number | null): number | null {
+  if (spread == null || !(spread > 0)) {
+    return null;
+  }
+  return spread * (1 + SLIPPAGE_SPREAD_MULT);
+}
+
+/** Net reward after spread and slippage. An unread spread stays unread. */
+export function computeNetR(input: {
+  entry: number;
+  stop: number;
+  target: number;
+  spread?: number | null;
+}): { netR: number; spreadKnown: boolean } {
+  const cost = executionCost(input.spread);
+  const applied = cost ?? 0;
+  const risk = Math.abs(input.entry - input.stop) + applied;
+  if (!(risk > 0)) {
+    return { netR: 0, spreadKnown: cost != null };
+  }
+  const reward = Math.max(0, Math.abs(input.target - input.entry) - applied);
+  return { netR: reward / risk, spreadKnown: cost != null };
+}
+
 /** Distance beyond the structural invalidation. The stop never sits on that level. */
 export function stopBuffer(input: {
   symbolPrice: number;

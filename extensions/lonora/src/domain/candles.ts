@@ -210,6 +210,26 @@ export function detectSupplyDemandZones(candles: Candle[]): SupplyDemandZone[] {
   return zones.slice(-30);
 }
 
+/** Fold closed bars into a higher timeframe. Incomplete buckets keep the bars they have. */
+export function foldCandles(candles: readonly Candle[], bucketMs: number): Candle[] {
+  const buckets = new Map<number, Candle>();
+  for (const candle of candles) {
+    if (!(bucketMs > 0)) {
+      continue;
+    }
+    const key = Math.floor(candle.time / bucketMs) * bucketMs;
+    const existing = buckets.get(key);
+    if (!existing) {
+      buckets.set(key, { ...candle, time: key });
+      continue;
+    }
+    existing.high = Math.max(existing.high, candle.high);
+    existing.low = Math.min(existing.low, candle.low);
+    existing.close = candle.close;
+  }
+  return [...buckets.values()].sort((left, right) => left.time - right.time);
+}
+
 export function biasFromCandles(
   candles: Candle[],
   params?: { lookbackBars?: number; changeThreshold?: number },

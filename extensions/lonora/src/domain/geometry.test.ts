@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "./candles.js";
+import { computeNetR } from "./geometry.js";
 import { applyStopDistanceFloor, placeProtectedStop, stopBuffer } from "./geometry.js";
-import { analyzePathToEntry, prepareGoldPlan, selectStructuralTargets } from "./plan.js";
+import {
+  analyzePathToEntry,
+  describePlanQuality,
+  higherTimeframeBias,
+  prepareGoldPlan,
+  selectStructuralTargets,
+  timeframeAlignment,
+} from "./plan.js";
 
 function bar(index: number, open: number, high: number, low: number, close: number): Candle {
   return { time: 1_700_000_000_000 + index * 3_600_000, open, high, low, close };
@@ -72,6 +80,9 @@ describe("prepare gold plan", () => {
     expect(prepared.plan.targets[0]).toBeGreaterThan(prepared.plan.entry);
     expect(prepared.plan.targets.length).toBeLessThanOrEqual(3);
     expect(prepared.plan.rationale).toContain("Structural targets");
+    expect(prepared.plan.rationale).toContain("The spread was not read");
+    expect(prepared.plan.rationale).not.toContain("Net reward after spread");
+    expect(prepared.plan.rationale).toContain("The higher timeframe was not read.");
     expect(prepared.plan.outcome).toBe("pending");
     expect(prepared.plan.rationale).toContain("2296");
     expect(prepared.plan.rationale).toMatch(/Zone grade [AB]/);
@@ -127,6 +138,33 @@ describe("prepare gold plan", () => {
     });
     expect(waiting.class).toBe("neutral_path");
     expect(waiting.transitionalTrade).toBe(false);
+  });
+
+  it("names an unread spread and a short higher timeframe instead of inventing either", () => {
+    const unread = computeNetR({ entry: 2300, stop: 2290, target: 2330 });
+    expect(unread.spreadKnown).toBe(false);
+    expect(unread.netR).toBeCloseTo(3);
+    const wide = computeNetR({ entry: 2300, stop: 2290, target: 2330, spread: 2 });
+    expect(wide.spreadKnown).toBe(true);
+    expect(wide.netR).toBeLessThan(2.5);
+    const text = describePlanQuality({
+      action: "buy",
+      entry: 2300,
+      stop: 2290,
+      target: 2330,
+      spread: 2,
+      higherBias: "bearish",
+      language: "en",
+    });
+    expect(text).toContain("does not pay the spread");
+    expect(text).toContain("conflicts");
+    expect(text).not.toContain("was not read");
+    const rising = Array.from({ length: 80 }, (_, index) => quiet(index, 2300 + index));
+    expect(higherTimeframeBias(rising)).toBe("bullish");
+    expect(timeframeAlignment("buy", "bullish")).toBe("aligned");
+    expect(timeframeAlignment("sell", "bullish")).toBe("conflict");
+    expect(higherTimeframeBias(rising.slice(0, 22))).toBe("unknown");
+    expect(timeframeAlignment("buy", "unknown")).toBe("unknown");
   });
 
   it("does not invent a plan when the candle sample is too short", () => {

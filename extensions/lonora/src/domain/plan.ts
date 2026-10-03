@@ -11,12 +11,20 @@ import {
   detectMajorLevels,
   detectSupplyDemandZones,
   detectSwings,
+  foldCandles,
   isSaneCandle,
+  type Bias,
   type Candle,
   type SupplyDemandZone,
 } from "./candles.js";
 import { copy } from "./copy.js";
-import { placeProtectedStop, roundToTick, tradeSpanFor } from "./geometry.js";
+import {
+  computeNetR,
+  MIN_NET_TP1_R,
+  placeProtectedStop,
+  roundToTick,
+  tradeSpanFor,
+} from "./geometry.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
 import type { OwnerLanguage } from "./owner.js";
 import type { RecommendationPlan } from "./recommendations.js";
@@ -50,6 +58,7 @@ export function prepareGoldPlan(
   candles: Candle[],
   language: OwnerLanguage = "en",
   now = Date.now(),
+  spread?: number | null,
 ): PreparedPlan | RejectedPlan {
   const visible = candles.filter((candle) => isSaneCandle(candle));
   const atr = calculateAtr(visible);
@@ -108,6 +117,15 @@ export function prepareGoldPlan(
       : path?.class === "neutral_path"
         ? `${copy(language, "plan.pathNeutral")} `
         : "";
+  const quality = describePlanQuality({
+    action,
+    entry,
+    stop: placed.stop,
+    target: targets[0]!,
+    spread,
+    higherBias: higherTimeframeBias(visible),
+    language,
+  });
   const plan: RecommendationPlan = {
     id: randomUUID(),
     symbol: "XAUUSD",
@@ -120,7 +138,7 @@ export function prepareGoldPlan(
     outcome: "pending",
     createdCandleTime: last.time,
     createdAt: now,
-    rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}. ${pathLine}${copy(language, "plan.targets")} ${targets.join(", ")}.`,
+    rationale: `${stopRationale(language, placed.structuralStop, placed.stop, placed.widened)} ${copy(language, "plan.grade")} ${zone.score.grade}. ${pathLine}${copy(language, "plan.targets")} ${targets.join(", ")}. ${quality}`,
   };
   return { ok: true, plan, invented: false, brokerCalled: false };
 }
@@ -221,6 +239,52 @@ export function analyzePathToEntry(input: {
     return { class: "unlikely_reach", transitionalTrade: false };
   }
   return { class: "neutral_path", transitionalTrade: false };
+}
+
+const HIGHER_BUCKET_MS = 4 * 60 * 60 * 1000;
+
+export function higherTimeframeBias(candles: readonly Candle[]): Bias {
+  return biasFromCandles(foldCandles(candles, HIGHER_BUCKET_MS));
+}
+
+export function timeframeAlignment(
+  action: "buy" | "sell",
+  bias: Bias,
+): "aligned" | "conflict" | "unknown" {
+  if (bias !== "bullish" && bias !== "bearish") {
+    return "unknown";
+  }
+  return bias === (action === "buy" ? "bullish" : "bearish") ? "aligned" : "conflict";
+}
+
+export function describePlanQuality(input: {
+  action: "buy" | "sell";
+  entry: number;
+  stop: number;
+  target: number;
+  spread?: number | null;
+  higherBias: Bias;
+  language: OwnerLanguage;
+}): string {
+  const net = computeNetR({
+    entry: input.entry,
+    stop: input.stop,
+    target: input.target,
+    spread: input.spread,
+  });
+  const spreadLine = !net.spreadKnown
+    ? copy(input.language, "plan.spreadUnread")
+    : net.netR + 1e-9 < MIN_NET_TP1_R
+      ? `${copy(input.language, "plan.spreadNet")} ${net.netR.toFixed(2)}R. ${copy(input.language, "plan.spreadWeak")}`
+      : `${copy(input.language, "plan.spreadNet")} ${net.netR.toFixed(2)}R.`;
+  const alignment = timeframeAlignment(input.action, input.higherBias);
+  const higherLine =
+    alignment === "conflict"
+      ? copy(input.language, "plan.htfConflict")
+      : alignment === "aligned"
+        ? copy(input.language, "plan.htfAligned")
+        : copy(input.language, "plan.htfUnknown");
+  return `${spreadLine} ${higherLine}`;
 }
 
 function structuralLevels(candles: Candle[]): number[] {
