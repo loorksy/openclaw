@@ -13,6 +13,7 @@ import {
   detectTrend,
   type Candle,
 } from "./candles.js";
+import { describeCandleShape, latestCandleShape } from "./candlesticks.js";
 import { copy } from "./copy.js";
 import { describeHeadlines, type NewsHeadline } from "./headlines.js";
 import { analyzeLiquidity } from "./liquidity-sweeps.js";
@@ -90,13 +91,15 @@ export function runStructureAnalyst(candles: Candle[]): SpecialistResult {
   const levels = detectMajorLevels(candles);
   const pattern = classifySwingRange(candles);
   const patternText = describePattern(pattern, "en");
+  const candleShape = latestCandleShape(candles);
+  const candleText = candleShape ? ` ${describeCandleShape(candleShape, "en")}` : "";
   return {
     agent: "structure-analyst",
     ok: true,
     summary: latest
-      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}`
-      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}`,
-    data: { trend, swings, events, latest, levels, atr, pattern },
+      ? `${trend} with ${latest.type} ${latest.direction} at ${latest.brokenLevel}. ${patternText}${candleText}`
+      : `${trend} with ${swings.length} swings and no fresh break. ${patternText}${candleText}`,
+    data: { trend, swings, events, latest, levels, atr, pattern, candleShape },
   };
 }
 

@@ -15,6 +15,7 @@ import {
   type EconomicEvent,
 } from "./domain/calendar.js";
 import { calculateAtr, isGoldSymbol, isSaneCandle, type Candle } from "./domain/candles.js";
+import { latestCandleShape } from "./domain/candlesticks.js";
 import { indexCandleCases, findSimilarCases } from "./domain/cases.js";
 import { copy, describeNotice, marketReasonCopy } from "./domain/copy.js";
 import { tradableRetestBand } from "./domain/fill.js";
@@ -252,6 +253,7 @@ export class LonoraService {
         ok: false as const,
         candles: [] as Candle[],
         pattern: null,
+        candleShape: null,
         invented: false as const,
         stale: true,
         error: read.error ?? "Market data is unavailable.",
@@ -268,6 +270,7 @@ export class LonoraService {
       candles: visible.candles,
       latestSweep: liquidity.latest,
       pattern: visible.candles.length > 0 ? classifySwingRange(visible.candles) : null,
+      candleShape: visible.candles.length > 0 ? latestCandleShape(visible.candles) : null,
       invented: false as const,
       stale: visible.stale,
       error: visible.candles.length > 0 ? null : "No closed candles are visible.",

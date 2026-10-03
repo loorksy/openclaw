@@ -35,6 +35,7 @@ class MarketPage extends OpenClawLightDomElement {
   @state() private latestSweep: { side: "buy_side" | "sell_side"; sweptLevel: number } | null =
     null;
   @state() private pattern: SwingRangeView | null = null;
+  @state() private candleShape: CandleShapeView | null = null;
   @state() private chartError: string | null = null;
   @state() private error: string | null = null;
   @state() private headlineText: string | null = null;
@@ -74,6 +75,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.candles = [];
       this.latestSweep = null;
       this.pattern = null;
+      this.candleShape = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -203,6 +205,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.candles = [];
       this.latestSweep = null;
       this.pattern = null;
+      this.candleShape = null;
       this.chartError = t("lonora.market.chartUnavailable");
       return;
     }
@@ -212,6 +215,7 @@ class MarketPage extends OpenClawLightDomElement {
         candles: ChartCandle[];
         latestSweep?: { side: "buy_side" | "sell_side"; sweptLevel: number } | null;
         pattern?: SwingRangeView | null;
+        candleShape?: CandleShapeView | null;
         invented: false;
         error?: string | null;
       }>("lonora.candles.read", {});
@@ -222,6 +226,10 @@ class MarketPage extends OpenClawLightDomElement {
       this.latestSweep = read.invented ? null : (read.latestSweep ?? null);
       this.pattern =
         read.invented || read.pattern?.inventedTarget !== false ? null : (read.pattern ?? null);
+      this.candleShape =
+        read.invented || read.candleShape?.inventedTarget !== false
+          ? null
+          : (read.candleShape ?? null);
       this.chartError = read.ok ? null : (read.error ?? t("lonora.market.chartEmpty"));
     } catch (error) {
       if (generation !== this.loadGeneration) {
@@ -230,6 +238,7 @@ class MarketPage extends OpenClawLightDomElement {
       this.candles = [];
       this.latestSweep = null;
       this.pattern = null;
+      this.candleShape = null;
       this.chartError =
         error instanceof Error ? error.message : t("lonora.market.chartUnavailable");
     }
@@ -300,6 +309,8 @@ class MarketPage extends OpenClawLightDomElement {
                 <p>${sweepText(this.latestSweep, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.pattern")}</h2>
                 <p>${patternText(this.pattern, this.chartError, this.candles.length)}</p>
+                <h2>${t("lonora.market.candle")}</h2>
+                <p>${candleText(this.candleShape, this.chartError, this.candles.length)}</p>
                 <h2>${t("lonora.market.activeRecommendations")}</h2>
                 ${
                   snapshot.recommendations.length
@@ -328,6 +339,11 @@ class MarketPage extends OpenClawLightDomElement {
   }
 }
 
+type CandleShapeView = {
+  name: string;
+  inventedTarget: false;
+};
+
 type SwingRangeView = {
   stage: string;
   high: number | null;
@@ -335,6 +351,63 @@ type SwingRangeView = {
   inventedTarget: false;
   named?: { kind: string; inventedTarget: false } | null;
 };
+
+function candleText(shape: CandleShapeView | null, error: string | null, candleCount: number) {
+  if (!shape || shape.inventedTarget !== false) {
+    if (error && candleCount === 0) {
+      return t("lonora.market.chartUnavailable");
+    }
+    return t("lonora.market.candleUnknown");
+  }
+  const name = candleShapeLabel(shape.name);
+  if (!name) {
+    return t("lonora.market.candleUnknown");
+  }
+  return `${name}. ${t("lonora.market.candleNotATrade")}`;
+}
+
+function candleShapeLabel(name: string) {
+  switch (name) {
+    case "doji":
+      return t("lonora.market.candleDoji");
+    case "hammer":
+      return t("lonora.market.candleHammer");
+    case "inverted_hammer":
+      return t("lonora.market.candleInvertedHammer");
+    case "shooting_star":
+      return t("lonora.market.candleShootingStar");
+    case "hanging_man":
+      return t("lonora.market.candleHangingMan");
+    case "marubozu_bullish":
+      return t("lonora.market.candleMarubozuBullish");
+    case "marubozu_bearish":
+      return t("lonora.market.candleMarubozuBearish");
+    case "spinning_top":
+      return t("lonora.market.candleSpinningTop");
+    case "bullish_engulfing":
+      return t("lonora.market.candleBullishEngulfing");
+    case "bearish_engulfing":
+      return t("lonora.market.candleBearishEngulfing");
+    case "morning_star":
+      return t("lonora.market.candleMorningStar");
+    case "evening_star":
+      return t("lonora.market.candleEveningStar");
+    case "three_white_soldiers":
+      return t("lonora.market.candleThreeWhiteSoldiers");
+    case "three_black_crows":
+      return t("lonora.market.candleThreeBlackCrows");
+    case "bullish_harami":
+      return t("lonora.market.candleBullishHarami");
+    case "bearish_harami":
+      return t("lonora.market.candleBearishHarami");
+    case "tweezer_top":
+      return t("lonora.market.candleTweezerTop");
+    case "tweezer_bottom":
+      return t("lonora.market.candleTweezerBottom");
+    default:
+      return "";
+  }
+}
 
 function patternText(pattern: SwingRangeView | null, error: string | null, candleCount: number) {
   if (!pattern) {
