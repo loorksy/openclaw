@@ -3,6 +3,7 @@ import { describeActivationRule, parseActivationRule } from "./domain/activation
 import {
   assertDelegation,
   MAX_CHILD_RUNS,
+  describeHigherTimeframe,
   runRiskReviewer,
   runSpecialist,
   runStructureAnalyst,
@@ -296,6 +297,7 @@ export class LonoraService {
     const resting = this.noteLiquidity(visible.candles);
     const zones = this.noteZones(visible.candles);
     this.noteStructure(visible.candles);
+    this.noteTimeframe(visible.candles);
     return {
       ok: visible.candles.length > 0,
       candles: visible.candles,
@@ -368,6 +370,7 @@ export class LonoraService {
         this.noteStructure(candles);
         this.noteLiquidity(candles);
         this.noteZones(candles);
+        this.noteTimeframe(candles);
         this.lastDataStatus = visible.stale ? "stale" : "ok";
         this.lastDataError = visible.stale ? "Candle data is stale." : null;
         price = candles.at(-1)?.close ?? null;
@@ -598,9 +601,11 @@ export class LonoraService {
       });
     }
     const visible = candlesVisibleAt(read.candles, now, GOLD_BAR_MS);
+    const candles = visible.candles.filter((candle) => isSaneCandle(candle));
+    this.noteTimeframe(candles);
     return this.delegate({
       agent: "multi-timeframe-analyst",
-      candles: visible.candles.filter((candle) => isSaneCandle(candle)),
+      candles,
     });
   }
 
@@ -669,7 +674,12 @@ export class LonoraService {
   }
 
   remember(kind: MemoryKind, content: string, symbol?: string) {
-    if (kind === "structure_read" || kind === "liquidity_read" || kind === "zone_read") {
+    if (
+      kind === "structure_read" ||
+      kind === "liquidity_read" ||
+      kind === "zone_read" ||
+      kind === "timeframe_read"
+    ) {
       return null;
     }
     return this.store.addMemory({ kind, content, symbol });
@@ -755,6 +765,24 @@ export class LonoraService {
     return zones;
   }
 
+  /**
+   * One four-hour sentence from the same closed candles.
+   * The next read replaces it. An empty or failed read leaves the previous sentence.
+   */
+  private noteTimeframe(candles: Candle[]): void {
+    if (candles.length === 0) {
+      return;
+    }
+    const language = this.store.ensureLocalOwner().language;
+    const text = describeHigherTimeframe(candles, language)
+      .summary.replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+    if (text) {
+      this.store.replaceMemory("timeframe_read", "XAUUSD", text);
+    }
+  }
+
   /** One rolling owner request. Assistant text and an empty turn are not stored. */
   noteConversation(messages: readonly unknown[]): string | null {
     const text = latestOwnerText(messages);
@@ -786,6 +814,7 @@ export class LonoraService {
     const structure = this.store.listRecentMemory("structure_read", 1);
     const liquidity = this.store.listRecentMemory("liquidity_read", 1);
     const zones = this.store.listRecentMemory("zone_read", 1);
+    const timeframe = this.store.listRecentMemory("timeframe_read", 1);
     const conversation = this.store.listRecentMemory("conversation", 1);
     const plans = this.store
       .listRecommendations()
@@ -802,6 +831,7 @@ export class LonoraService {
       structure.length === 0 &&
       liquidity.length === 0 &&
       zones.length === 0 &&
+      timeframe.length === 0 &&
       conversation.length === 0 &&
       plans.length === 0 &&
       tasks.length === 0
@@ -823,6 +853,9 @@ export class LonoraService {
     }
     if (zones[0]) {
       lines.push(`${copy(language, "memory.zones")} ${zones[0].content}`);
+    }
+    if (timeframe[0]) {
+      lines.push(`${copy(language, "memory.timeframe")} ${timeframe[0].content}`);
     }
     if (conversation[0]) {
       lines.push(`${copy(language, "memory.conversation")} ${conversation[0].content}`);
@@ -891,7 +924,6 @@ export class LonoraService {
   delegate(input: {
     agent: SpecialistId;
     candles?: Candle[];
-    higher?: Candle[];
     entry?: number;
     stopLoss?: number;
     targets?: number[];

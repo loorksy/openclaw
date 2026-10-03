@@ -72,6 +72,41 @@ function hourlyCloses(now: number, closes: number[]): Candle[] {
   }));
 }
 
+/** Rising hourly swings. Ninety-six bars fold into a bullish four-hour read. */
+function hourlyZigzag(count: number, start = 1_700_000_000_000): Candle[] {
+  return Array.from({ length: count }, (_, index) => {
+    const phase = index % 8;
+    const cycle = Math.floor(index / 8);
+    const close = 100 + cycle * 6 + (phase < 4 ? phase * 2 : (8 - phase) * 1.5);
+    return {
+      time: start + index * 3_600_000,
+      open: close,
+      high: close + (phase === 3 ? 10 : 0.4),
+      low: close - (phase === 7 ? 10 : 0.4),
+      close,
+    };
+  });
+}
+
+/** The four-hour window stays up while the latest swings step down. */
+function conflictingHours(): Candle[] {
+  const rising = hourlyZigzag(96);
+  const peak = rising.at(-1)?.close ?? 100;
+  const pullback = Array.from({ length: 32 }, (_, index) => {
+    const phase = index % 8;
+    const cycle = Math.floor(index / 8);
+    const close = peak - 4 - cycle * 3 - (phase < 4 ? phase : 8 - phase);
+    return {
+      time: (rising.at(-1)?.time ?? 1_700_000_000_000) + (index + 1) * 3_600_000,
+      open: close,
+      high: close + (phase === 3 ? 10 : 0.4),
+      low: close - (phase === 7 ? 10 : 0.4),
+      close,
+    };
+  });
+  return [...rising, ...pullback];
+}
+
 function risingCandles(count: number, start = 2300): Candle[] {
   return Array.from({ length: count }, (_, index) => {
     const close = start + index;
@@ -184,37 +219,25 @@ describe("structure", () => {
     expect(unread.summary).toBe("The higher timeframe was not read.");
     expect(unread.data.aligned).toBeNull();
     expect(unread.summary).not.toMatch(/agree/i);
-    const higher = Array.from({ length: 20 }, (_, index) => {
-      const close = 100 + index * 2;
-      return {
-        time: index * 14_400_000,
-        open: close,
-        high: close + 1,
-        low: close - 1,
-        close,
-      };
-    });
-    const aligned = runSpecialist("multi-timeframe-analyst", { candles, higher });
+    const aligned = runSpecialist("multi-timeframe-analyst", { candles: hourlyZigzag(96) });
     expect(aligned.data.aligned).toBe(true);
     expect(aligned.summary).toContain("Uptrend.");
     expect(aligned.summary).toContain("The four-hour read is up.");
     expect(aligned.summary).toContain("The working timeframe agrees with that read.");
-    const falling = higher.map((bar, index) => {
-      const close = 200 - index * 2;
-      return { ...bar, open: close, high: close + 1, low: close - 1, close };
+    const conflict = runSpecialist("multi-timeframe-analyst", {
+      candles: conflictingHours(),
     });
-    const conflict = runSpecialist("multi-timeframe-analyst", { candles, higher: falling });
     expect(conflict.data.aligned).toBe(false);
     expect(conflict.summary).toContain("does not agree");
     expect(conflict.summary).not.toContain("agrees with");
     const arabic = runSpecialist("multi-timeframe-analyst", {
-      candles,
-      higher,
+      candles: hourlyZigzag(96),
       language: "ar",
     });
     expect(arabic.summary).toContain("اتجاه صاعد");
     expect(arabic.summary).toContain("قراءة أربع ساعات صاعدة");
-    expect(arabic.summary).toContain("يوافق هذه القراءة");
+    expect(arabic.summary).toContain("الإطار العامل يوافق هذه القراءة");
+    expect(arabic.summary).not.toContain("لا يوافق");
     expect(arabic.summary).not.toContain("Uptrend");
   });
 
@@ -1223,6 +1246,73 @@ describe("market data", () => {
     const arabic = await service.compareTimeframes(openAt);
     expect(arabic.summary).toBe("الإطار الزمني الأعلى لم يُقرأ.");
     expect(arabic.summary).not.toContain("was not read");
+    expect(service.ownerBrief()).toBe(copy("ar", "memory.empty"));
+    store.close();
+  });
+
+  it("stores the four-hour read from the closed feed in the gold brief", async () => {
+    const store = LonoraStore.open(":memory:");
+    const service = new LonoraService(store);
+    const openAt = Date.UTC(2026, 0, 14, 15, 0);
+    const closedAt = Date.parse("2026-01-03T15:00:00Z");
+    const short = hourlyCloses(
+      openAt,
+      Array.from({ length: 15 }, () => 120),
+    );
+    service.readCandles = async () => ({
+      ok: true,
+      candles: short,
+      price: 120,
+      stale: false,
+      invented: false,
+    });
+    const closed = await service.monitorOnce(closedAt);
+    expect(closed.dataStatus).toBe("closed");
+    expect(service.ownerBrief()).toBe(copy("en", "memory.empty"));
+
+    await service.monitorOnce(openAt);
+    expect(service.ownerBrief()).toContain("Higher timeframe: The higher timeframe was not read.");
+    expect(service.ownerBrief()).not.toMatch(/agree/i);
+    expect(service.recall("not read", "timeframe_read")).toHaveLength(1);
+
+    service.readCandles = async () => ({
+      ok: true,
+      candles: hourlyZigzag(96),
+      price: 160,
+      stale: false,
+      invented: false,
+    });
+    const read = await service.readVisibleCandles(openAt);
+    expect(read.invented).toBe(false);
+    expect(service.ownerBrief()).toContain("Higher timeframe: Uptrend. The four-hour read is up.");
+    expect(service.ownerBrief()).toContain("The working timeframe agrees with that read.");
+    expect(service.ownerBrief()).not.toContain("was not read");
+    expect(service.remember("timeframe_read", "aligned by a supplied series", "XAUUSD")).toBeNull();
+    expect(service.ownerBrief()).not.toContain("supplied series");
+
+    service.readCandles = async () => ({
+      ok: false,
+      candles: [],
+      price: null,
+      stale: true,
+      invented: false,
+      error: "down",
+    });
+    const failed = await service.readVisibleCandles(openAt);
+    expect(failed.ok).toBe(false);
+    expect(service.ownerBrief()).toContain("The four-hour read is up.");
+
+    store.setLanguage("ar");
+    service.readCandles = async () => ({
+      ok: true,
+      candles: hourlyZigzag(96),
+      price: 160,
+      stale: false,
+      invented: false,
+    });
+    await service.readVisibleCandles(openAt);
+    expect(service.ownerBrief()).toContain("الإطار الأعلى: اتجاه صاعد. قراءة أربع ساعات صاعدة.");
+    expect(service.ownerBrief()).not.toContain("Higher timeframe:");
     store.close();
   });
 

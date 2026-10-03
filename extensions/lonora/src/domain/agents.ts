@@ -5,11 +5,11 @@ import { describeCalendarEvents, type EconomicEvent } from "./calendar.js";
  * a canned "reviewed" sentence.
  */
 import {
-  biasFromCandles,
   calculateAtr,
   detectMajorLevels,
   detectSwings,
   detectTrend,
+  type Bias,
   type Candle,
 } from "./candles.js";
 import { describeCandleShape, latestCandleShape } from "./candlesticks.js";
@@ -189,45 +189,40 @@ export function runSupplyDemandAnalyst(
   };
 }
 
-export function runMultiTimeframeAnalyst(input: {
-  lower: Candle[];
-  higher?: Candle[];
-  language?: OwnerLanguage;
-}): SpecialistResult {
-  const language = input.language ?? "en";
-  const lower = runStructureAnalyst(input.lower, language);
-  if (!lower.ok) {
-    return { ...lower, agent: "multi-timeframe-analyst" };
-  }
-  const higherBias =
-    input.higher && input.higher.length > 0
-      ? biasFromCandles(input.higher)
-      : higherTimeframeBias(input.lower);
-  const trend = lower.data.trend;
+/** Four-hour fold of the closed feed. A caller-supplied series is not this sample. */
+export function describeHigherTimeframe(
+  candles: readonly Candle[],
+  language: OwnerLanguage,
+): { summary: string; higherBias: Bias; aligned: boolean | null } {
+  const higherBias = higherTimeframeBias(candles);
   if (higherBias !== "bullish" && higherBias !== "bearish") {
-    return {
-      agent: "multi-timeframe-analyst",
-      ok: true,
-      summary: copy(language, "plan.htfUnknown"),
-      data: { lower: lower.data, higherBias, aligned: null },
-    };
+    return { summary: copy(language, "plan.htfUnknown"), higherBias, aligned: null };
   }
+  const trend = detectTrend(detectSwings([...candles]));
   if (trend !== "uptrend" && trend !== "downtrend") {
-    return {
-      agent: "multi-timeframe-analyst",
-      ok: true,
-      summary: copy(language, "mtf.trendUnread"),
-      data: { lower: lower.data, higherBias, aligned: null },
-    };
+    return { summary: copy(language, "mtf.trendUnread"), higherBias, aligned: null };
   }
   const aligned =
     (trend === "uptrend" && higherBias === "bullish") ||
     (trend === "downtrend" && higherBias === "bearish");
   return {
+    summary: `${describeTrend(language, trend)}. ${copy(language, higherBias === "bullish" ? "mtf.bullish" : "mtf.bearish")} ${copy(language, aligned ? "mtf.aligned" : "mtf.conflict")}`,
+    higherBias,
+    aligned,
+  };
+}
+
+export function runMultiTimeframeAnalyst(input: {
+  lower: Candle[];
+  language?: OwnerLanguage;
+}): SpecialistResult {
+  const language = input.language ?? "en";
+  const read = describeHigherTimeframe(input.lower, language);
+  return {
     agent: "multi-timeframe-analyst",
     ok: true,
-    summary: `${describeTrend(language, trend)}. ${copy(language, higherBias === "bullish" ? "mtf.bullish" : "mtf.bearish")} ${copy(language, aligned ? "mtf.aligned" : "mtf.conflict")}`,
-    data: { lower: lower.data, higherBias, aligned },
+    summary: read.summary,
+    data: { higherBias: read.higherBias, aligned: read.aligned },
   };
 }
 
@@ -285,7 +280,6 @@ export function runSpecialist(
   id: SpecialistId,
   input: {
     candles?: Candle[];
-    higher?: Candle[];
     entry?: number;
     stopLoss?: number;
     targets?: number[];
@@ -323,7 +317,6 @@ export function runSpecialist(
       }
       return runMultiTimeframeAnalyst({
         lower: input.candles ?? [],
-        higher: input.higher,
         language: input.language ?? "en",
       });
     case "risk-reviewer":

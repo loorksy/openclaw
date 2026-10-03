@@ -96,6 +96,7 @@ const COPY = {
     "memory.structure": "Latest structure:",
     "memory.liquidity": "Latest liquidity:",
     "memory.zones": "Latest zones:",
+    "memory.timeframe": "Higher timeframe:",
     "memory.plans": "Open plans:",
     "memory.risk": "Plan grade:",
     "purpose.marketWatcher":
@@ -308,6 +309,7 @@ const COPY = {
     "memory.structure": "آخر قراءة:",
     "memory.liquidity": "آخر سيولة:",
     "memory.zones": "آخر مناطق:",
+    "memory.timeframe": "الإطار الأعلى:",
     "memory.plans": "خطط مفتوحة:",
     "memory.risk": "درجة الخطة:",
     "purpose.marketWatcher": "يراقب الذهب للتغيّر المهم دون استدعاء نموذج عند كل شمعة.",

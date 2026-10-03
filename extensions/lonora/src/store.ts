@@ -13,6 +13,7 @@ export type MemoryKind =
   | "structure_read"
   | "liquidity_read"
   | "zone_read"
+  | "timeframe_read"
   | "recommendation"
   | "historical_case"
   | "lesson"
